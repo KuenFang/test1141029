@@ -1,0 +1,4 @@
+streamlit
+google-genai
+# 如果您使用了正則表達式，re 是內建庫，無需列出
+# 如果您使用了其他庫，例如 requests，請在此處添加
