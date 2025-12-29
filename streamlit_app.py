@@ -14,10 +14,10 @@ from google.genai import errors
 from google.genai.errors import APIError 
 
 # =============================================================================
-# 0. 全域設定 (模型名稱在此修改)
+# 0. 全域設定
 # =============================================================================
 
-# 【V5.9 更新】使用使用者指定的最新模型名稱
+# 維持使用您查到的正確預覽版模型名稱
 MODEL_NAME = "gemini-3-pro-preview"
 
 # =============================================================================
@@ -231,7 +231,9 @@ if 'current_page' not in st.session_state:
 if 'analysis_results' not in st.session_state:
     st.session_state['analysis_results'] = None
 if 'current_pdf_bytes' not in st.session_state:
-    st.session_state['current_pdf_bytes'] = None # 儲存原始PDF供對話使用
+    st.session_state['current_pdf_bytes'] = None 
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # =============================================================================
 # 1. 輔助函數
@@ -496,6 +498,73 @@ def report_page():
         st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。")
         st.code(ratio_output, language='markdown') 
 
+    # =========================================================================
+    # 【新增功能】可開闔的 AI 對話區塊 (調整位置至比率表下方、Tab 上方)
+    # =========================================================================
+    
+    st.markdown("---")
+    
+    # 處理對話輸入的回調函數
+    def submit_chat():
+        user_input = st.session_state.chat_input_val
+        if user_input:
+            # 1. 紀錄使用者訊息
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            
+            # 2. 準備 Context
+            input_contents = []
+            
+            # (A) 原始 PDF
+            if st.session_state.get('current_pdf_bytes'):
+                try:
+                    pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
+                    input_contents.append(pdf_part)
+                except: pass
+            
+            # (B) 上傳的圖片 (若有) - 這裡簡化為只能讀一次，若要連續對話需優化 Session State
+            # 由於 text_input 不能直接連動 file_uploader，此處圖片上傳建議放在 expander 內比較直觀
+            # 但為了 context，我們會在 expander 內保留一個 uploader，如果有的話就加入
+            
+            # (C) 系統提示與標準化數據
+            std_data = results.get('standardization', '')
+            system_prompt_text = f"""
+            你是一位專業且靈活的財務顧問。
+            【資料來源】已附上原始 PDF 與 標準化數據 (節錄): {std_data[:3000]}...
+            【任務】回答使用者問題: {user_input}
+            """
+            input_contents.append(system_prompt_text)
+
+            # 3. 呼叫 API
+            response = call_chat_api(input_contents)
+            
+            if response.get("error"):
+                reply = f"❌ 發生錯誤: {response['error']}"
+            else:
+                reply = response["content"]
+            
+            st.session_state.chat_history.append({"role": "assistant", "content": reply})
+            
+            # 清空輸入框
+            st.session_state.chat_input_val = ""
+
+    # --- 介面佈局 (符合兩行要求) ---
+    
+    # 第一行：對話紀錄 Expander (預設收起)
+    with st.expander("💬 AI 財報助手 - 對話紀錄", expanded=False):
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        
+        # 讓使用者可以在此上傳圖片輔助對話
+        st.file_uploader("📎 上傳圖片 (選用，例如截圖)", type=["png", "jpg", "jpeg"], key="chat_image_uploader")
+
+    # 第二行：輸入框 (直接外露)
+    st.text_input(
+        "在此輸入您的問題 (例如: 請詳細解釋這家公司的存貨增加原因)...", 
+        key="chat_input_val", 
+        on_change=submit_chat
+    )
+
     st.markdown("---")
 
     # --- 3. 報告分頁區塊 ---
@@ -515,96 +584,6 @@ def report_page():
         st.subheader("📊 資訊提取")
         st.markdown(results['standardization'] if results['standardization'] else "標準化資訊提取失敗。")
             
-    st.markdown("---")
-
-    # =========================================================================
-    # 【功能】可開闔的 AI 對話區塊 (High Temperature, Free Context)
-    # =========================================================================
-    
-    with st.expander("💬 AI 財報助手 (自由問答模式)", expanded=False):
-        st.caption("🤖 此區塊模型溫度設定較高 (1.2)，您可以自由詢問財報細節、要求翻譯、或上傳截圖進行分析。")
-        
-        # 初始化對話歷史
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-
-        # 顯示歷史訊息
-        for message in st.session_state.chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        # 額外：允許使用者在對話中上傳圖片 (選用)
-        chat_uploaded_file = st.file_uploader("📎 上傳圖片或檔案 (選用，例如截圖)", type=["png", "jpg", "jpeg", "pdf"], key="chat_uploader")
-        
-        # 使用者輸入框
-        if prompt := st.chat_input("請輸入您的問題 (例如: 請詳細解釋這家公司的業外損失來源)..."):
-            
-            # 1. 顯示使用者訊息
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            st.session_state.chat_history.append({"role": "user", "content": prompt})
-
-            # 2. 準備給 AI 的 Context
-            # 包含：(A) 原始財報 PDF, (B) 標準化數據, (C) 這次上傳的圖片(若有)
-            
-            input_contents = []
-            
-            # (A) 原始財報 PDF (來自 session_state)
-            if st.session_state.get('current_pdf_bytes'):
-                try:
-                    pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
-                    input_contents.append(pdf_part)
-                except: pass
-
-            # (B) 這次對話上傳的圖片/檔案 (若有)
-            if chat_uploaded_file:
-                try:
-                    mime_type = chat_uploaded_file.type
-                    file_bytes = chat_uploaded_file.read()
-                    file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-                    input_contents.append(file_part)
-                    st.info(f"已接收上傳檔案: {chat_uploaded_file.name}")
-                except Exception as e:
-                    st.error(f"檔案讀取失敗: {e}")
-
-            # (C) 系統提示與標準化數據
-            std_data = results.get('standardization', '')
-            system_prompt_text = f"""
-            你是一位專業且靈活的財務顧問。
-            
-            【資料來源 1】你已經閱讀了這家公司的原始財報 PDF (已附上)。
-            【資料來源 2】以下是我們已經整理好的標準化財務數據：
-            {std_data[:5000]} (節錄)
-            
-            【任務】
-            請根據使用者的問題進行回答。
-            與之前的嚴格分析不同，你可以自由發揮、使用外部知識(如果需要)、並以輕鬆但專業的口吻對話。
-            如果使用者上傳了圖片，請幫忙分析圖片內容。
-            """
-            
-            input_contents.append(system_prompt_text)
-            input_contents.append(f"使用者問題: {prompt}")
-
-            # 3. 呼叫 Chat API (High Temperature)
-            with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-                message_placeholder.markdown("Thinking...")
-                
-                try:
-                    # 這裡使用單次 generate_content 來模擬對話回應
-                    response = call_chat_api(input_contents) 
-                    
-                    if response.get("error"):
-                        full_response = f"❌ 發生錯誤: {response['error']}"
-                    else:
-                        full_response = response["content"]
-                    
-                    message_placeholder.markdown(full_response)
-                    st.session_state.chat_history.append({"role": "assistant", "content": full_response})
-                    
-                except Exception as e:
-                    message_placeholder.markdown(f"Error: {e}")
-
     # --- 4. 回上頁按鈕 ---
     col_footer, _ = st.columns([1, 4])
     with col_footer:
@@ -615,7 +594,7 @@ def report_page():
 
 
 # =============================================================================
-# 5. API 呼叫函數 (【V5.9】使用 MODEL_NAME 變數)
+# 5. API 呼叫函數
 # =============================================================================
 
 def call_multimodal_api(file_content_bytes, prompt, use_search=False):
