@@ -14,7 +14,14 @@ from google.genai import errors
 from google.genai.errors import APIError 
 
 # =============================================================================
-# 0. 核心規則與 API Key 設置
+# 0. 全域設定 (模型名稱在此修改)
+# =============================================================================
+
+# 【V5.9 更新】使用使用者指定的最新模型名稱
+MODEL_NAME = "gemini-3-pro-preview"
+
+# =============================================================================
+# 1. 核心規則與 API Key 設置
 # =============================================================================
 
 # 步驟 1：抓取公司名稱
@@ -78,7 +85,7 @@ PROMPT_BIAO_ZHUN_HUA_CONTENT = textwrap.dedent("""
 三七、營運部門資訊,擁有哪些營運部門
 """)
 
-# 步驟 3：比率計算 (V5.5 P/E 邏輯)
+# 步驟 3：比率計算 (P/E 修正版)
 PROMPT_RATIO_CONTENT = textwrap.dedent("""
 請根據以下計算公式及限制，計算股東權益報酬率 (ROE)、本益比 (P/E Ratio)、淨利率 (Net Profit Margin)、毛利率 (Gross Profit Margin)、負債比率 (Debt Ratio)、流動比率 (Current Ratio)、速動比率 (Quick Ratio) 之兩期數據。
 
@@ -511,7 +518,7 @@ def report_page():
     st.markdown("---")
 
     # =========================================================================
-    # 【新增功能】可開闔的 AI 對話區塊 (High Temperature, Free Context)
+    # 【功能】可開闔的 AI 對話區塊 (High Temperature, Free Context)
     # =========================================================================
     
     with st.expander("💬 AI 財報助手 (自由問答模式)", expanded=False):
@@ -584,7 +591,7 @@ def report_page():
                 message_placeholder.markdown("Thinking...")
                 
                 try:
-                    # 這裡使用單次 generate_content 來模擬對話回應 (帶入 history 需更複雜邏輯，這裡簡化為單輪強 Context)
+                    # 這裡使用單次 generate_content 來模擬對話回應
                     response = call_chat_api(input_contents) 
                     
                     if response.get("error"):
@@ -608,7 +615,7 @@ def report_page():
 
 
 # =============================================================================
-# 5. API 呼叫函數 (V5.6)
+# 5. API 呼叫函數 (【V5.9】使用 MODEL_NAME 變數)
 # =============================================================================
 
 def call_multimodal_api(file_content_bytes, prompt, use_search=False):
@@ -622,11 +629,11 @@ def call_multimodal_api(file_content_bytes, prompt, use_search=False):
 
     contents = [pdf_part, prompt] 
     tools_config = [{"google_search": {}}] if use_search else None
-    config = types.GenerateContentConfig(temperature=0.0, tools=tools_config) # 嚴格模式
+    config = types.GenerateContentConfig(temperature=0.0, tools=tools_config)
 
     for attempt in range(4): 
         try:
-            response = CLIENT.models.generate_content(model='gemini-3.0-pro', contents=contents, config=config)
+            response = CLIENT.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
             return {"status": "success", "content": response.text}
         except Exception as e:
             if attempt == 3: return {"error": str(e)}
@@ -638,30 +645,29 @@ def call_text_api(input_text, prompt):
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
 
     contents = [input_text, prompt] 
-    config = types.GenerateContentConfig(temperature=0.0, tools=None) # 嚴格模式
+    config = types.GenerateContentConfig(temperature=0.0, tools=None)
 
     for attempt in range(4):
         try:
-            response = CLIENT.models.generate_content(model='gemini-3.0-pro', contents=contents, config=config)
+            response = CLIENT.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
             return {"status": "success", "content": response.text}
         except Exception as e:
             if attempt == 3: return {"error": str(e)}
             time.sleep(2)
 
 def call_chat_api(contents):
-    """【新增】對話專用 API (Temperature=1.2, 高自由度)"""
+    """對話專用 API (Temperature=1.2, 高自由度)"""
     global CLIENT 
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
 
-    # 設定較高的 Temperature 讓 AI 更有創意與對話感
     config = types.GenerateContentConfig(
         temperature=1.2, 
-        tools=[{"google_search": {}}] # 允許對話時上網搜尋補充資訊
+        tools=[{"google_search": {}}] 
     )
 
     try:
         response = CLIENT.models.generate_content(
-            model='gemini-3.0-pro', 
+            model=MODEL_NAME, 
             contents=contents, 
             config=config
         )
