@@ -271,6 +271,23 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide",
 )
+# 【新增】K.R.版本 浮水印 CSS
+st.markdown("""
+<style>
+    .fixed-watermark {
+        position: fixed;
+        bottom: 15px;
+        left: 15px;
+        font-size: 14px;
+        color: rgba(128, 128, 128, 0.5); /* 半透明灰色 */
+        font-weight: bold;
+        z-index: 9999;
+        pointer-events: none; /* 讓點擊穿透，不阻擋操作 */
+    }
+</style>
+<div class="fixed-watermark">K.R.版本</div>
+""", unsafe_allow_html=True)
+
 st.markdown("""<style>html { lang: "zh-Hant"; }</style>""", unsafe_allow_html=True)
 keep_alive = """<script>setInterval(() => { fetch(window.location.href, {mode: 'no-cors'}); }, 300000);</script>"""
 st.markdown(keep_alive, unsafe_allow_html=True)
@@ -405,106 +422,111 @@ def report_page():
     title_text = f"**{company_name}** 財報分析"
     st.markdown(f"<h1 style='text-align: center;'>{title_text}</h1>", unsafe_allow_html=True)
     
-    # 【第一區塊：財務比率】(使用 container 強制分區)
-    section_ratios = st.container()
-    with section_ratios:
-        st.subheader("財務比率") 
-        ratio_output = results['ratio']
-        ratio_tables = results['ratio'].split('\n\n') 
-        valid_tables = [t.strip() for t in ratio_tables if t.strip().startswith('|') and '---' in t]
+    # -------------------------------------------------------------------------
+    # 區塊 1：財務比率
+    # -------------------------------------------------------------------------
+    st.subheader("財務比率") 
+    ratio_output = results['ratio']
+    ratio_tables = results['ratio'].split('\n\n') 
+    valid_tables = [t.strip() for t in ratio_tables if t.strip().startswith('|') and '---' in t]
 
-        ratio_map = {}
-        for table_md in valid_tables:
-            first_line = table_md.split('\n')[0]
-            if '本益比' in first_line: ratio_map['P/E Ratio'] = table_md
-            elif '淨利率' in first_line: ratio_map['Net Profit Margin'] = table_md
-            elif '毛利率' in first_line: ratio_map['Gross Profit Margin'] = table_md
-            elif '股東權益報酬率' in first_line or 'ROE' in first_line: ratio_map['ROE'] = table_md
-            elif '流動比率' in first_line: ratio_map['Current Ratio'] = table_md
-            elif '負債比率' in first_line: ratio_map['Debt Ratio'] = table_md
-            elif '速動比率' in first_line: ratio_map['Quick Ratio'] = table_md
-                
-        ORDERED_RATIOS = [
-            ('ROE', '股東權益報酬率'), ('Net Profit Margin', '淨利率'), ('Gross Profit Margin', '毛利率'),
-            ('P/E Ratio', '本益比'), ('Current Ratio', '流動比率'), ('Debt Ratio', '負債比率'), ('Quick Ratio', '速動比率')
-        ]
+    ratio_map = {}
+    for table_md in valid_tables:
+        first_line = table_md.split('\n')[0]
+        if '本益比' in first_line: ratio_map['P/E Ratio'] = table_md
+        elif '淨利率' in first_line: ratio_map['Net Profit Margin'] = table_md
+        elif '毛利率' in first_line: ratio_map['Gross Profit Margin'] = table_md
+        elif '股東權益報酬率' in first_line or 'ROE' in first_line: ratio_map['ROE'] = table_md
+        elif '流動比率' in first_line: ratio_map['Current Ratio'] = table_md
+        elif '負債比率' in first_line: ratio_map['Debt Ratio'] = table_md
+        elif '速動比率' in first_line: ratio_map['Quick Ratio'] = table_md
+            
+    ORDERED_RATIOS = [
+        ('ROE', '股東權益報酬率'), ('Net Profit Margin', '淨利率'), ('Gross Profit Margin', '毛利率'),
+        ('P/E Ratio', '本益比'), ('Current Ratio', '流動比率'), ('Debt Ratio', '負債比率'), ('Quick Ratio', '速動比率')
+    ]
 
-        col1, col2, col3 = st.columns(3)
-        cols_row1 = [col1, col2, col3]
-        col4, col5, col6, col7 = st.columns(4)
-        cols_row2 = [col4, col5, col6, col7]
-        all_cols = cols_row1 + cols_row2
-        found_ratios_count = len(ratio_map)
+    col1, col2, col3 = st.columns(3)
+    cols_row1 = [col1, col2, col3]
+    col4, col5, col6, col7 = st.columns(4)
+    cols_row2 = [col4, col5, col6, col7]
+    all_cols = cols_row1 + cols_row2
+    found_ratios_count = len(ratio_map)
 
-        if found_ratios_count >= 7:
-            for i, (key, _) in enumerate(ORDERED_RATIOS):
-                if i < len(all_cols):
-                    with all_cols[i]:
-                        st.markdown(ratio_map.get(key, f"**無法找到 {key} 數據**"), unsafe_allow_html=True) 
-        else:
-            st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。")
-            st.code(ratio_output, language='markdown') 
-        
-        st.markdown("---") # 分隔線
+    if found_ratios_count >= 7:
+        for i, (key, _) in enumerate(ORDERED_RATIOS):
+            if i < len(all_cols):
+                with all_cols[i]:
+                    st.markdown(ratio_map.get(key, f"**無法找到 {key} 數據**"), unsafe_allow_html=True) 
+    else:
+        st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。")
+        st.code(ratio_output, language='markdown') 
+    
+    st.markdown("---") # 分隔線
 
-    # 【第二區塊：AI 對話區 (置中)】(使用 container 強制分區)
-    section_chat = st.container()
-    with section_chat:
-        # 回調函數
-        def submit_chat():
-            user_input = st.session_state.chat_input_val
-            if user_input:
-                st.session_state.chat_history.append({"role": "user", "content": user_input})
-                input_contents = []
-                if st.session_state.get('current_pdf_bytes'):
-                    try:
-                        pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
-                        input_contents.append(pdf_part)
-                    except: pass
-                
-                std_data = results.get('standardization', '')
-                system_prompt_text = f"""
-                你是一位專業且靈活的財務顧問。
-                【資料來源】已附上原始 PDF 與 標準化數據 (節錄): {std_data[:3000]}...
-                【任務】回答使用者問題: {user_input}
-                """
-                input_contents.append(system_prompt_text)
+    # -------------------------------------------------------------------------
+    # 區塊 2：AI 對話區 (置於中間)
+    # -------------------------------------------------------------------------
+    
+    # 處理輸入的回調函數
+    def submit_chat():
+        user_input = st.session_state.chat_input_val
+        if user_input:
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            
+            input_contents = []
+            if st.session_state.get('current_pdf_bytes'):
+                try:
+                    pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
+                    input_contents.append(pdf_part)
+                except: pass
+            
+            std_data = results.get('standardization', '')
+            system_prompt_text = f"""
+            你是一位專業且靈活的財務顧問。
+            【資料來源】已附上原始 PDF 與 標準化數據 (節錄): {std_data[:3000]}...
+            【任務】回答使用者問題: {user_input}
+            """
+            input_contents.append(system_prompt_text)
 
-                response = call_chat_api(input_contents)
-                reply = f"❌ 發生錯誤: {response['error']}" if response.get("error") else response["content"]
-                st.session_state.chat_history.append({"role": "assistant", "content": reply})
-                st.session_state.chat_input_val = ""
+            response = call_chat_api(input_contents)
+            reply = f"❌ 發生錯誤: {response['error']}" if response.get("error") else response["content"]
+            st.session_state.chat_history.append({"role": "assistant", "content": reply})
+            
+            st.session_state.chat_input_val = ""
 
-        # 第一行：對話紀錄 Expander
-        with st.expander("💬 AI 財報助手 - 對話紀錄", expanded=False):
-            for message in st.session_state.chat_history:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-            st.file_uploader("📎 上傳圖片 (選用)", type=["png", "jpg", "jpeg"], key="chat_image_uploader")
+    st.subheader("💬 AI 財報助手")
+    
+    # 第一行：對話紀錄 Expander (預設收起)
+    with st.expander("查看對話紀錄 / 上傳圖片", expanded=False):
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        st.file_uploader("📎 上傳圖片 (選用)", type=["png", "jpg", "jpeg"], key="chat_image_uploader")
 
-        # 第二行：輸入框 (常駐)
-        st.text_input("請輸入您的問題 (例如: 請詳細解釋存貨增加的原因)...", key="chat_input_val", on_change=submit_chat)
-        
-        st.markdown("---") # 分隔線
+    # 第二行：輸入框 (直接外露)
+    st.text_input("請輸入您的問題 (例如: 請詳細解釋存貨增加的原因)...", key="chat_input_val", on_change=submit_chat)
+    
+    st.markdown("---") # 分隔線
 
-    # 【第三區塊：三大分頁】(使用 container 強制分區)
-    section_tabs = st.container()
-    with section_tabs:
-        tab1, tab2, tab3 = st.tabs([
-            "📄 財報總結 (專業審計視角)", 
-            "🗣️ 數據講解 (非專業人士白話文)", 
-            "📊 資訊提取 (標準化數據)", 
-        ])
+    # -------------------------------------------------------------------------
+    # 區塊 3：三大分頁
+    # -------------------------------------------------------------------------
+    tab1, tab2, tab3 = st.tabs([
+        "📄 財報總結 (專業審計視角)", 
+        "🗣️ 數據講解 (非專業人士白話文)", 
+        "📊 資訊提取 (標準化數據)", 
+    ])
 
-        with tab1:
-            st.subheader("📄 財報總結")
-            st.markdown(results['summary'] if results['summary'] else "財報總結生成失敗。")
-        with tab2:
-            st.subheader("🗣️ 數據講解")
-            st.markdown(results['explanation'] if results['explanation'] else "數據講解生成失敗。")
-        with tab3:
-            st.subheader("📊 資訊提取")
-            st.markdown(results['standardization'] if results['standardization'] else "標準化資訊提取失敗。")
+    with tab1:
+        st.subheader("📄 財報總結")
+        st.markdown(results['summary'] if results['summary'] else "財報總結生成失敗。")
+    with tab2:
+        st.subheader("🗣️ 數據講解")
+        st.markdown(results['explanation'] if results['explanation'] else "數據講解生成失敗。")
+    with tab3:
+        st.subheader("📊 資訊提取")
+        st.markdown(results['standardization'] if results['standardization'] else "標準化資訊提取失敗。")
             
     # Footer
     st.markdown("---")
