@@ -17,7 +17,6 @@ from google.genai.errors import APIError
 # 0. 全域設定
 # =============================================================================
 
-# 維持使用您查到的正確預覽版模型名稱
 MODEL_NAME = "gemini-3-pro-preview"
 
 # =============================================================================
@@ -281,83 +280,49 @@ if st.session_state['current_page'] == 'Home':
 
 
 # =============================================================================
-# 3. 核心分析邏輯 (封裝為函數以便重複使用)
+# 3. 核心分析邏輯
 # =============================================================================
 
 def run_analysis_flow(file_content_to_send, status_container):
-    """
-    執行 5 步驟分析流程，並將 PDF 存入 session_state 供對話使用。
-    """
+    """執行 5 步驟分析流程"""
     company_name = None
     standardization_data = None
     ratio_data = None
     summary_data = None
     explanation_data = None
     
-    # 【新增】儲存原始 PDF bytes 供後續對話功能使用
     st.session_state['current_pdf_bytes'] = file_content_to_send
-    # 【新增】清空舊的對話紀錄
     st.session_state['chat_history'] = []
     
     try:
-        # --- 步驟 1: 抓取公司名稱 (PDF -> Text) ---
         with status_container.status("⏳ 正在執行 AI 分析...", expanded=True) as status:
-            
             st.write("步驟 1/5: 正在抓取公司名稱...")
-            name_response = call_multimodal_api(
-                file_content_bytes=file_content_to_send,
-                prompt=PROMPT_COMPANY_NAME, 
-                use_search=False
-            )
-            if name_response.get("error"):
-                raise Exception(f"抓取公司名稱失敗: {name_response['error']}")
+            name_response = call_multimodal_api(file_content_to_send, PROMPT_COMPANY_NAME, False)
+            if name_response.get("error"): raise Exception(f"抓取公司名稱失敗: {name_response['error']}")
             company_name = name_response["content"].strip()
             
-            # --- 步驟 2: 標準化 (PDF -> Text) ---
-            st.write("步驟 2/5: 正在提取與標準化財報數據 (若失敗將自動重試)...")
-            std_response = call_multimodal_api(
-                file_content_bytes=file_content_to_send,
-                prompt=PROMPT_BIAO_ZHUN_HUA_CONTENT, 
-                use_search=False
-            )
-            if std_response.get("error"):
-                raise Exception(f"標準化失敗: {std_response['error']}")
+            st.write("步驟 2/5: 正在提取與標準化財報數據...")
+            std_response = call_multimodal_api(file_content_to_send, PROMPT_BIAO_ZHUN_HUA_CONTENT, False)
+            if std_response.get("error"): raise Exception(f"標準化失敗: {std_response['error']}")
             standardization_data = std_response["content"]
 
-            # --- 步驟 3: 比率計算 (PDF -> Text) ---
-            st.write("步驟 3/5: 正在計算財務比率 (若失敗將自動重試)...")
-            ratio_response = call_multimodal_api(
-                file_content_bytes=file_content_to_send,
-                prompt=PROMPT_RATIO_CONTENT, 
-                use_search=True 
-            )
-            if ratio_response.get("error"):
-                raise Exception(f"比率計算失敗: {ratio_response['error']}")
+            st.write("步驟 3/5: 正在計算財務比率...")
+            ratio_response = call_multimodal_api(file_content_to_send, PROMPT_RATIO_CONTENT, True)
+            if ratio_response.get("error"): raise Exception(f"比率計算失敗: {ratio_response['error']}")
             ratio_data = ratio_response["content"]
 
-            # --- 步驟 4: 總結 (Text -> Text) ---
-            st.write("步驟 4/5: 正在生成專業審計總結 (若失敗將自動重試)...")
-            summary_response = call_text_api(
-                input_text=standardization_data,
-                prompt=PROMPT_ZONG_JIE_CONTENT 
-            )
-            if summary_response.get("error"):
-                raise Exception(f"總結生成失敗: {summary_response['error']}")
+            st.write("步驟 4/5: 正在生成專業審計總結...")
+            summary_response = call_text_api(standardization_data, PROMPT_ZONG_JIE_CONTENT)
+            if summary_response.get("error"): raise Exception(f"總結生成失敗: {summary_response['error']}")
             summary_data = summary_response["content"]
 
-            # --- 步驟 5: 講解 (Text -> Text) ---
-            st.write("步驟 5/5: 正在生成白話文講解 (若失敗將自動重試)...")
-            explanation_response = call_text_api(
-                input_text=standardization_data,
-                prompt=PROMPT_JIAN_JIE_CONTENT 
-            )
-            if explanation_response.get("error"):
-                raise Exception(f"講解生成失敗: {explanation_response['error']}")
+            st.write("步驟 5/5: 正在生成白話文講解...")
+            explanation_response = call_text_api(standardization_data, PROMPT_JIAN_JIE_CONTENT)
+            if explanation_response.get("error"): raise Exception(f"講解生成失敗: {explanation_response['error']}")
             explanation_data = explanation_response["content"]
             
             status.update(label="✅ 分析完成！", state="complete", expanded=False)
 
-        # --- 處理結果 ---
         parsed_content = {
             "company_name": company_name,
             "ratio": ratio_data,
@@ -377,11 +342,9 @@ def run_analysis_flow(file_content_to_send, status_container):
 # 4. 頁面內容定義
 # =============================================================================
 
-# --- A. Home Page (檔案上傳與分析觸發) ---
+# --- A. Home Page ---
 
 def home_page():
-    """主頁：包含上傳區塊與評審專用快速按鍵。"""
-    
     st.subheader("一鍵智能財報分析與解讀")
     st.markdown("本系統利用 **AI 多模態技術**，對您上傳的 PDF 財報進行**數據提取、專業比率計算**，並生成**專業審計總結**和**非專業白話文講解**等多視角報告。")
 
@@ -389,35 +352,20 @@ def home_page():
         st.error(GLOBAL_CONFIG_ERROR)
         return
 
-    # --- 1. 評審專用快速按鍵區塊 ---
     col1, col2, col3, col4 = st.columns(4)
-    
     file_path_to_process = None
     status_container = st.empty() 
     
     with col1:
-        if st.button("📊 2330", use_container_width=True):
-            file_path_to_process = "2330.pdf"
+        if st.button("📊 2330", use_container_width=True): file_path_to_process = "2330.pdf"
     with col2:
-        if st.button("📊 2382", use_container_width=True):
-            file_path_to_process = "2382.pdf"
+        if st.button("📊 2382", use_container_width=True): file_path_to_process = "2382.pdf"
     with col3:
-        if st.button("📊 2308", use_container_width=True):
-            file_path_to_process = "2308.pdf"
+        if st.button("📊 2308", use_container_width=True): file_path_to_process = "2308.pdf"
     with col4:
-        if st.button("📊 2454", use_container_width=True):
-            file_path_to_process = "2454.pdf"
+        if st.button("📊 2454", use_container_width=True): file_path_to_process = "2454.pdf"
 
-    # --- 2. 標準上傳區塊 ---
-    
-    uploaded_file = st.file_uploader(
-        "請上傳您的財務報表文件 (或點擊上方快速按鍵)", 
-        type=["pdf"],
-        help="僅支援 PDF 格式文件",
-        key="uploader"
-    )
-    
-    # --- 處理邏輯 ---
+    uploaded_file = st.file_uploader("請上傳您的財務報表文件 (或點擊上方快速按鍵)", type=["pdf"], key="uploader")
     
     if file_path_to_process:
         if os.path.exists(file_path_to_process):
@@ -428,7 +376,7 @@ def home_page():
             except Exception as e:
                 st.error(f"讀取範例檔案失敗: {e}")
         else:
-            st.error(f"找不到範例檔案：{file_path_to_process}。請確認檔案已上傳至專案目錄。")
+            st.error(f"找不到範例檔案：{file_path_to_process}。")
 
     elif uploaded_file:
         if st.button("🚀 開始分析並生成報告", type="primary", key="start_analysis"):
@@ -438,158 +386,133 @@ def home_page():
             except Exception as e:
                 st.error(f"讀取文件時發生錯誤: {e}")
                 st.stop()
-            
             run_analysis_flow(file_bytes, status_container)
 
     st.markdown("---")
 
 
-# --- B. Report Page (三種視角分頁呈現) ---
+# --- B. Report Page ---
 
 def report_page():
-    """報告結果頁面：增加可開闔的 AI 對話框。"""
-    
     results = st.session_state.get('analysis_results')
     if not results:
         st.info("請先在開始介面中上傳檔案並執行分析。")
         navigate_to('Home')
         return
     
-    # 1. 動態標題
+    # 標題
     company_name = results.get("company_name", "財報分析") 
     title_text = f"**{company_name}** 財報分析"
     st.markdown(f"<h1 style='text-align: center;'>{title_text}</h1>", unsafe_allow_html=True)
     
-    # --- 2. 財務比率區塊 ---
-    st.subheader("財務比率") 
-    ratio_output = results['ratio']
-    ratio_tables = results['ratio'].split('\n\n') 
-    valid_tables = [t.strip() for t in ratio_tables if t.strip().startswith('|') and '---' in t]
+    # 【第一區塊：財務比率】(使用 container 強制分區)
+    section_ratios = st.container()
+    with section_ratios:
+        st.subheader("財務比率") 
+        ratio_output = results['ratio']
+        ratio_tables = results['ratio'].split('\n\n') 
+        valid_tables = [t.strip() for t in ratio_tables if t.strip().startswith('|') and '---' in t]
 
-    ratio_map = {}
-    for table_md in valid_tables:
-        first_line = table_md.split('\n')[0]
-        if '本益比' in first_line: ratio_map['P/E Ratio'] = table_md
-        elif '淨利率' in first_line: ratio_map['Net Profit Margin'] = table_md
-        elif '毛利率' in first_line: ratio_map['Gross Profit Margin'] = table_md
-        elif '股東權益報酬率' in first_line or 'ROE' in first_line: ratio_map['ROE'] = table_md
-        elif '流動比率' in first_line: ratio_map['Current Ratio'] = table_md
-        elif '負債比率' in first_line: ratio_map['Debt Ratio'] = table_md
-        elif '速動比率' in first_line: ratio_map['Quick Ratio'] = table_md
-            
-    ORDERED_RATIOS = [
-        ('ROE', '股東權益報酬率'), ('Net Profit Margin', '淨利率'), ('Gross Profit Margin', '毛利率'),
-        ('P/E Ratio', '本益比'), ('Current Ratio', '流動比率'), ('Debt Ratio', '負債比率'), ('Quick Ratio', '速動比率')
-    ]
+        ratio_map = {}
+        for table_md in valid_tables:
+            first_line = table_md.split('\n')[0]
+            if '本益比' in first_line: ratio_map['P/E Ratio'] = table_md
+            elif '淨利率' in first_line: ratio_map['Net Profit Margin'] = table_md
+            elif '毛利率' in first_line: ratio_map['Gross Profit Margin'] = table_md
+            elif '股東權益報酬率' in first_line or 'ROE' in first_line: ratio_map['ROE'] = table_md
+            elif '流動比率' in first_line: ratio_map['Current Ratio'] = table_md
+            elif '負債比率' in first_line: ratio_map['Debt Ratio'] = table_md
+            elif '速動比率' in first_line: ratio_map['Quick Ratio'] = table_md
+                
+        ORDERED_RATIOS = [
+            ('ROE', '股東權益報酬率'), ('Net Profit Margin', '淨利率'), ('Gross Profit Margin', '毛利率'),
+            ('P/E Ratio', '本益比'), ('Current Ratio', '流動比率'), ('Debt Ratio', '負債比率'), ('Quick Ratio', '速動比率')
+        ]
 
-    col1, col2, col3 = st.columns(3)
-    cols_row1 = [col1, col2, col3]
-    col4, col5, col6, col7 = st.columns(4)
-    cols_row2 = [col4, col5, col6, col7]
-    all_cols = cols_row1 + cols_row2
-    found_ratios_count = len(ratio_map)
+        col1, col2, col3 = st.columns(3)
+        cols_row1 = [col1, col2, col3]
+        col4, col5, col6, col7 = st.columns(4)
+        cols_row2 = [col4, col5, col6, col7]
+        all_cols = cols_row1 + cols_row2
+        found_ratios_count = len(ratio_map)
 
-    if found_ratios_count >= 7:
-        for i, (key, _) in enumerate(ORDERED_RATIOS):
-            if i < len(all_cols):
-                with all_cols[i]:
-                    st.markdown(ratio_map.get(key, f"**無法找到 {key} 數據**"), unsafe_allow_html=True) 
-    else:
-        st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。")
-        st.code(ratio_output, language='markdown') 
-
-    # =========================================================================
-    # 【新增功能】可開闔的 AI 對話區塊 (調整位置至比率表下方、Tab 上方)
-    # =========================================================================
-    
-    st.markdown("---")
-    
-    # 處理對話輸入的回調函數
-    def submit_chat():
-        user_input = st.session_state.chat_input_val
-        if user_input:
-            # 1. 紀錄使用者訊息
-            st.session_state.chat_history.append({"role": "user", "content": user_input})
-            
-            # 2. 準備 Context
-            input_contents = []
-            
-            # (A) 原始 PDF
-            if st.session_state.get('current_pdf_bytes'):
-                try:
-                    pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
-                    input_contents.append(pdf_part)
-                except: pass
-            
-            # (B) 上傳的圖片 (若有) - 這裡簡化為只能讀一次，若要連續對話需優化 Session State
-            # 由於 text_input 不能直接連動 file_uploader，此處圖片上傳建議放在 expander 內比較直觀
-            # 但為了 context，我們會在 expander 內保留一個 uploader，如果有的話就加入
-            
-            # (C) 系統提示與標準化數據
-            std_data = results.get('standardization', '')
-            system_prompt_text = f"""
-            你是一位專業且靈活的財務顧問。
-            【資料來源】已附上原始 PDF 與 標準化數據 (節錄): {std_data[:3000]}...
-            【任務】回答使用者問題: {user_input}
-            """
-            input_contents.append(system_prompt_text)
-
-            # 3. 呼叫 API
-            response = call_chat_api(input_contents)
-            
-            if response.get("error"):
-                reply = f"❌ 發生錯誤: {response['error']}"
-            else:
-                reply = response["content"]
-            
-            st.session_state.chat_history.append({"role": "assistant", "content": reply})
-            
-            # 清空輸入框
-            st.session_state.chat_input_val = ""
-
-    # --- 介面佈局 (符合兩行要求) ---
-    
-    # 第一行：對話紀錄 Expander (預設收起)
-    with st.expander("💬 AI 財報助手 - 對話紀錄", expanded=False):
-        for message in st.session_state.chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+        if found_ratios_count >= 7:
+            for i, (key, _) in enumerate(ORDERED_RATIOS):
+                if i < len(all_cols):
+                    with all_cols[i]:
+                        st.markdown(ratio_map.get(key, f"**無法找到 {key} 數據**"), unsafe_allow_html=True) 
+        else:
+            st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。")
+            st.code(ratio_output, language='markdown') 
         
-        # 讓使用者可以在此上傳圖片輔助對話
-        st.file_uploader("📎 上傳圖片 (選用，例如截圖)", type=["png", "jpg", "jpeg"], key="chat_image_uploader")
+        st.markdown("---") # 分隔線
 
-    # 第二行：輸入框 (直接外露)
-    st.text_input(
-        "在此輸入您的問題 (例如: 請詳細解釋這家公司的存貨增加原因)...", 
-        key="chat_input_val", 
-        on_change=submit_chat
-    )
+    # 【第二區塊：AI 對話區 (置中)】(使用 container 強制分區)
+    section_chat = st.container()
+    with section_chat:
+        # 回調函數
+        def submit_chat():
+            user_input = st.session_state.chat_input_val
+            if user_input:
+                st.session_state.chat_history.append({"role": "user", "content": user_input})
+                input_contents = []
+                if st.session_state.get('current_pdf_bytes'):
+                    try:
+                        pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
+                        input_contents.append(pdf_part)
+                    except: pass
+                
+                std_data = results.get('standardization', '')
+                system_prompt_text = f"""
+                你是一位專業且靈活的財務顧問。
+                【資料來源】已附上原始 PDF 與 標準化數據 (節錄): {std_data[:3000]}...
+                【任務】回答使用者問題: {user_input}
+                """
+                input_contents.append(system_prompt_text)
 
-    st.markdown("---")
+                response = call_chat_api(input_contents)
+                reply = f"❌ 發生錯誤: {response['error']}" if response.get("error") else response["content"]
+                st.session_state.chat_history.append({"role": "assistant", "content": reply})
+                st.session_state.chat_input_val = ""
 
-    # --- 3. 報告分頁區塊 ---
-    tab1, tab2, tab3 = st.tabs([
-        "📄 財報總結 (專業審計視角)", 
-        "🗣️ 數據講解 (非專業人士白話文)", 
-        "📊 資訊提取 (標準化數據)", 
-    ])
+        # 第一行：對話紀錄 Expander
+        with st.expander("💬 AI 財報助手 - 對話紀錄", expanded=False):
+            for message in st.session_state.chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+            st.file_uploader("📎 上傳圖片 (選用)", type=["png", "jpg", "jpeg"], key="chat_image_uploader")
 
-    with tab1:
-        st.subheader("📄 財報總結")
-        st.markdown(results['summary'] if results['summary'] else "財報總結生成失敗。")
-    with tab2:
-        st.subheader("🗣️ 數據講解")
-        st.markdown(results['explanation'] if results['explanation'] else "數據講解生成失敗。")
-    with tab3:
-        st.subheader("📊 資訊提取")
-        st.markdown(results['standardization'] if results['standardization'] else "標準化資訊提取失敗。")
+        # 第二行：輸入框 (常駐)
+        st.text_input("請輸入您的問題 (例如: 請詳細解釋存貨增加的原因)...", key="chat_input_val", on_change=submit_chat)
+        
+        st.markdown("---") # 分隔線
+
+    # 【第三區塊：三大分頁】(使用 container 強制分區)
+    section_tabs = st.container()
+    with section_tabs:
+        tab1, tab2, tab3 = st.tabs([
+            "📄 財報總結 (專業審計視角)", 
+            "🗣️ 數據講解 (非專業人士白話文)", 
+            "📊 資訊提取 (標準化數據)", 
+        ])
+
+        with tab1:
+            st.subheader("📄 財報總結")
+            st.markdown(results['summary'] if results['summary'] else "財報總結生成失敗。")
+        with tab2:
+            st.subheader("🗣️ 數據講解")
+            st.markdown(results['explanation'] if results['explanation'] else "數據講解生成失敗。")
+        with tab3:
+            st.subheader("📊 資訊提取")
+            st.markdown(results['standardization'] if results['standardization'] else "標準化資訊提取失敗。")
             
-    # --- 4. 回上頁按鈕 ---
+    # Footer
+    st.markdown("---")
     col_footer, _ = st.columns([1, 4])
     with col_footer:
         if st.button("⬅️ 回到上傳頁面", type="secondary", key="back_to_home_footer"):
             st.session_state['analysis_results'] = None
-            st.session_state['current_pdf_bytes'] = None # 清除緩存
+            st.session_state['current_pdf_bytes'] = None
             navigate_to('Home')
 
 
@@ -598,7 +521,6 @@ def report_page():
 # =============================================================================
 
 def call_multimodal_api(file_content_bytes, prompt, use_search=False):
-    """標準分析用 (Temperature=0.0)"""
     global CLIENT 
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
     
@@ -619,7 +541,6 @@ def call_multimodal_api(file_content_bytes, prompt, use_search=False):
             time.sleep(2)
 
 def call_text_api(input_text, prompt):
-    """純文字分析用 (Temperature=0.0)"""
     global CLIENT 
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
 
@@ -635,21 +556,13 @@ def call_text_api(input_text, prompt):
             time.sleep(2)
 
 def call_chat_api(contents):
-    """對話專用 API (Temperature=1.2, 高自由度)"""
     global CLIENT 
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
 
-    config = types.GenerateContentConfig(
-        temperature=1.2, 
-        tools=[{"google_search": {}}] 
-    )
+    config = types.GenerateContentConfig(temperature=1.2, tools=[{"google_search": {}}])
 
     try:
-        response = CLIENT.models.generate_content(
-            model=MODEL_NAME, 
-            contents=contents, 
-            config=config
-        )
+        response = CLIENT.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
         return {"status": "success", "content": response.text}
     except Exception as e:
         return {"error": str(e)}
