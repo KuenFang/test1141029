@@ -14,10 +14,8 @@ from google.genai import errors
 from google.genai.errors import APIError 
 
 # =============================================================================
-# 0. 核心規則與 API Key 設置 (規則硬編碼 - 論文核心)
+# 0. 核心規則與 API Key 設置
 # =============================================================================
-
-# --- 提示詞內容硬編碼 (V5.0：乾淨、無冗餘的最終版本) ---
 
 # 步驟 1：抓取公司名稱
 PROMPT_COMPANY_NAME = textwrap.dedent("""
@@ -80,7 +78,7 @@ PROMPT_BIAO_ZHUN_HUA_CONTENT = textwrap.dedent("""
 三七、營運部門資訊,擁有哪些營運部門
 """)
 
-# 步驟 3：比率計算
+# 步驟 3：比率計算 (【V5.5 修正】P/E 計算邏輯強化)
 PROMPT_RATIO_CONTENT = textwrap.dedent("""
 請根據以下計算公式及限制，計算股東權益報酬率 (ROE)、本益比 (P/E Ratio)、淨利率 (Net Profit Margin)、毛利率 (Gross Profit Margin)、負債比率 (Debt Ratio)、流動比率 (Current Ratio)、速動比率 (Quick Ratio) 之兩期數據。
 
@@ -101,7 +99,16 @@ PROMPT_RATIO_CONTENT = textwrap.dedent("""
 計算公式：
 財務比率 (Financial Ratio),計算公式 (Formula),備註 (Notes)
 1. 股東權益報酬率 (ROE),(歸屬於母公司業主之本期淨利) / (歸屬於母公司業主之平均權益),當期（例如半年）數據計算。,其中，平均權益 = (期初歸屬於母公司業主之權益 + 期末歸屬於母公司業主之權益) / 2,
-2. 本益比 (P/E Ratio) (以當日收盤價格為基準),(收盤價) / (歸屬於母公司業主之累積至當季淨利(並進行年化) / 期末流通在外股數)，使用基本每股盈餘，本比率限定僅需計算本年度(1/1日至當季最後一日)，不需要2期對比。
+2. 本益比 (P/E Ratio) (以當日收盤價格為基準), **(收盤價) / (年化每股盈餘)**。
+   **年化每股盈餘 (Annualized EPS) 計算規則 (必須嚴格遵守)：**
+   - 步驟 A: 判斷財報期間。
+   - 步驟 B: 根據期間調整 EPS：
+     - 若為第一季 (Q1, 1-3月): 年化 EPS = 本期 EPS x 4
+     - 若為上半年 (H1, 1-6月): 年化 EPS = 本期累計 EPS x 2
+     - 若為前三季 (Q3, 1-9月): 年化 EPS = (本期累計 EPS / 3) x 4
+     - 若為全年度 (Annual, 1-12月): 年化 EPS = 本期累計 EPS x 1
+   - 步驟 C: 使用指定的收盤價除以算出的年化 EPS。
+   *注意：使用基本每股盈餘。指定收盤價請使用 Google Search 搜尋該財報截止日或次日的收盤價格。*
 3. 淨利率 (Net Profit Margin),(本期淨利) / (營業收入),單季數據計算。
 4. 毛利率 (Gross Profit Margin),(營業毛利) / (營業收入),單季數據計算。
 5. 負債比率 (Debt Ratio),(負債總計) / (資產總計),期末時點數據計算。
@@ -112,8 +119,7 @@ PROMPT_RATIO_CONTENT = textwrap.dedent("""
 計算時間基準：毛利率、淨利率、本益比皆以「單季」數據進行計算；需要平均餘額的比率（ROE）以「當期」期間為基礎。
 平均餘額計算：分母的平均餘額必須採用該「當期」期間的期初餘額與期末餘額之平均。
 數據替換原則：若缺乏當期「期初」數據，則採用可取得的最近一期餘額來替代期初數據，並在報告中明確註明此近似處理。
-不進行年化處理：所有的比率計算結果直接呈現該期間的數據，不轉換為年化率，除非計算式有特別要求進行年化。
-指定收盤價：本益比（P/E Ratio）的計算需到網絡上進行搜尋 (請使用 Google Search搜尋當日收盤價格，如仍在開盤期間使用前一日收盤價格)。
+不進行年化處理：所有的比率計算結果直接呈現該期間的數據，不轉換為年化率，除非計算式有特別要求進行年化 (如 P/E)。
 內部驗證機制：在生成最終報告前，會進行內部雙重計算與核對。
 處理資料缺漏：若因缺乏必要的數據而無法計算，將明確標示為**「無法計算」**並註明原因。
 """)
@@ -270,8 +276,6 @@ if st.session_state['current_page'] == 'Home':
 def run_analysis_flow(file_content_to_send, status_container):
     """
     執行 5 步驟分析流程。
-    :param file_content_to_send: PDF 檔案的 bytes 資料
-    :param status_container: 用於顯示進度的 Streamlit 容器 (st.empty() 或 st.container())
     """
     company_name = None
     standardization_data = None
@@ -369,12 +373,13 @@ def home_page():
         st.error(GLOBAL_CONFIG_ERROR)
         return
 
-    # --- 1. 評審專用快速按鍵區塊 (調整至上方) ---
+    # --- 1. 評審專用快速按鍵區塊 (位於上傳框上方) ---
     col1, col2, col3, col4 = st.columns(4)
     
     file_path_to_process = None
     status_container = st.empty() # 共用狀態容器
     
+    # 定義按鈕與檔案對應
     with col1:
         if st.button("📊 2330", use_container_width=True):
             file_path_to_process = "2330.pdf"
@@ -389,10 +394,9 @@ def home_page():
             file_path_to_process = "2454.pdf"
 
     # --- 2. 標準上傳區塊 ---
-    # (間隔)
     
     uploaded_file = st.file_uploader(
-        "請上傳您的財務報表文件", 
+        "請上傳您的財務報表文件 (或點擊上方快速按鍵)", 
         type=["pdf"],
         help="僅支援 PDF 格式文件",
         key="uploader"
