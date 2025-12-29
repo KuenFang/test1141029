@@ -78,7 +78,7 @@ PROMPT_BIAO_ZHUN_HUA_CONTENT = textwrap.dedent("""
 三七、營運部門資訊,擁有哪些營運部門
 """)
 
-# 步驟 3：比率計算 (【V5.5 修正】P/E 計算邏輯強化)
+# 步驟 3：比率計算 (V5.5 P/E 邏輯)
 PROMPT_RATIO_CONTENT = textwrap.dedent("""
 請根據以下計算公式及限制，計算股東權益報酬率 (ROE)、本益比 (P/E Ratio)、淨利率 (Net Profit Margin)、毛利率 (Gross Profit Margin)、負債比率 (Debt Ratio)、流動比率 (Current Ratio)、速動比率 (Quick Ratio) 之兩期數據。
 
@@ -373,13 +373,12 @@ def home_page():
         st.error(GLOBAL_CONFIG_ERROR)
         return
 
-    # --- 1. 評審專用快速按鍵區塊 (位於上傳框上方) ---
+    # --- 1. 評審專用快速按鍵區塊 ---
     col1, col2, col3, col4 = st.columns(4)
     
     file_path_to_process = None
-    status_container = st.empty() # 共用狀態容器
+    status_container = st.empty() 
     
-    # 定義按鈕與檔案對應
     with col1:
         if st.button("📊 2330", use_container_width=True):
             file_path_to_process = "2330.pdf"
@@ -404,7 +403,6 @@ def home_page():
     
     # --- 處理邏輯 ---
     
-    # 情況 A: 點擊了快速按鍵
     if file_path_to_process:
         if os.path.exists(file_path_to_process):
             try:
@@ -416,7 +414,6 @@ def home_page():
         else:
             st.error(f"找不到範例檔案：{file_path_to_process}。請確認檔案已上傳至專案目錄。")
 
-    # 情況 B: 上傳了檔案並點擊開始
     elif uploaded_file:
         if st.button("🚀 開始分析並生成報告", type="primary", key="start_analysis"):
             file_bytes = None
@@ -479,7 +476,6 @@ def report_page():
     all_cols = cols_row1 + cols_row2
     found_ratios_count = len(ratio_map)
 
-    # st.markdown 會自動渲染 2x2 的 P/E 表格
     if found_ratios_count >= 7:
         for i, (key, _) in enumerate(ORDERED_RATIOS):
             if i < len(all_cols):
@@ -518,13 +514,12 @@ def report_page():
 
 
 # =============================================================================
-# 5. API 呼叫函數
+# 5. API 呼叫函數 (【V5.5 升級】使用 gemini-3.0-pro)
 # =============================================================================
 
 def call_multimodal_api(file_content_bytes, prompt, use_search=False):
     """
     呼叫 Gemini API 處理多模態輸入 (PDF + Prompt)
-    (包含重試邏輯)
     """
     global CLIENT 
     if CLIENT is None:
@@ -551,7 +546,7 @@ def call_multimodal_api(file_content_bytes, prompt, use_search=False):
     for attempt in range(MAX_RETRIES + 1): 
         try:
             response = CLIENT.models.generate_content(
-                model='gemini-2.5-pro', 
+                model='gemini-3.0-pro', 
                 contents=contents,
                 config=config 
             )
@@ -575,7 +570,6 @@ def call_multimodal_api(file_content_bytes, prompt, use_search=False):
 def call_text_api(input_text, prompt):
     """
     呼叫 Gemini API 處理純文字輸入 (Text + Prompt)
-    (包含重試邏輯)
     """
     global CLIENT 
     if CLIENT is None:
@@ -593,7 +587,7 @@ def call_text_api(input_text, prompt):
     for attempt in range(MAX_RETRIES + 1):
         try:
             response = CLIENT.models.generate_content(
-                model='gemini-2.5-pro', 
+                model='gemini-3.0-pro', 
                 contents=contents,
                 config=config 
             )
