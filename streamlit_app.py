@@ -223,6 +223,8 @@ if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'Home'
 if 'analysis_results' not in st.session_state:
     st.session_state['analysis_results'] = None
+if 'current_pdf_bytes' not in st.session_state:
+    st.session_state['current_pdf_bytes'] = None # 儲存原始PDF供對話使用
 
 # =============================================================================
 # 1. 輔助函數
@@ -275,13 +277,18 @@ if st.session_state['current_page'] == 'Home':
 
 def run_analysis_flow(file_content_to_send, status_container):
     """
-    執行 5 步驟分析流程。
+    執行 5 步驟分析流程，並將 PDF 存入 session_state 供對話使用。
     """
     company_name = None
     standardization_data = None
     ratio_data = None
     summary_data = None
     explanation_data = None
+    
+    # 【新增】儲存原始 PDF bytes 供後續對話功能使用
+    st.session_state['current_pdf_bytes'] = file_content_to_send
+    # 【新增】清空舊的對話紀錄
+    st.session_state['chat_history'] = []
     
     try:
         # --- 步驟 1: 抓取公司名稱 (PDF -> Text) ---
@@ -431,7 +438,7 @@ def home_page():
 # --- B. Report Page (三種視角分頁呈現) ---
 
 def report_page():
-    """報告結果頁面：使用 Tab 呈現三種不同風格的報告。"""
+    """報告結果頁面：增加可開闔的 AI 對話框。"""
     
     results = st.session_state.get('analysis_results')
     if not results:
@@ -444,12 +451,9 @@ def report_page():
     title_text = f"**{company_name}** 財報分析"
     st.markdown(f"<h1 style='text-align: center;'>{title_text}</h1>", unsafe_allow_html=True)
     
-    # --- 2. 財務比率區塊 (兩排佈局) ---
-    
+    # --- 2. 財務比率區塊 ---
     st.subheader("財務比率") 
-    
     ratio_output = results['ratio']
-    
     ratio_tables = results['ratio'].split('\n\n') 
     valid_tables = [t.strip() for t in ratio_tables if t.strip().startswith('|') and '---' in t]
 
@@ -482,7 +486,7 @@ def report_page():
                 with all_cols[i]:
                     st.markdown(ratio_map.get(key, f"**無法找到 {key} 數據**"), unsafe_allow_html=True) 
     else:
-        st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。模型輸出可能不符合嚴格的 Markdown 格式。")
+        st.warning(f"比率計算表格解析失敗，僅找到 {found_ratios_count} 個所需比率。")
         st.code(ratio_output, language='markdown') 
 
     st.markdown("---")
@@ -504,109 +508,166 @@ def report_page():
         st.subheader("📊 資訊提取")
         st.markdown(results['standardization'] if results['standardization'] else "標準化資訊提取失敗。")
             
-    # --- 4. 回上頁按鈕 ---
     st.markdown("---")
+
+    # =========================================================================
+    # 【新增功能】可開闔的 AI 對話區塊 (High Temperature, Free Context)
+    # =========================================================================
+    
+    with st.expander("💬 AI 財報助手 (自由問答模式)", expanded=False):
+        st.caption("🤖 此區塊模型溫度設定較高 (1.2)，您可以自由詢問財報細節、要求翻譯、或上傳截圖進行分析。")
+        
+        # 初始化對話歷史
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        # 顯示歷史訊息
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        # 額外：允許使用者在對話中上傳圖片 (選用)
+        chat_uploaded_file = st.file_uploader("📎 上傳圖片或檔案 (選用，例如截圖)", type=["png", "jpg", "jpeg", "pdf"], key="chat_uploader")
+        
+        # 使用者輸入框
+        if prompt := st.chat_input("請輸入您的問題 (例如: 請詳細解釋這家公司的業外損失來源)..."):
+            
+            # 1. 顯示使用者訊息
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+
+            # 2. 準備給 AI 的 Context
+            # 包含：(A) 原始財報 PDF, (B) 標準化數據, (C) 這次上傳的圖片(若有)
+            
+            input_contents = []
+            
+            # (A) 原始財報 PDF (來自 session_state)
+            if st.session_state.get('current_pdf_bytes'):
+                try:
+                    pdf_part = types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf')
+                    input_contents.append(pdf_part)
+                except: pass
+
+            # (B) 這次對話上傳的圖片/檔案 (若有)
+            if chat_uploaded_file:
+                try:
+                    mime_type = chat_uploaded_file.type
+                    file_bytes = chat_uploaded_file.read()
+                    file_part = types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                    input_contents.append(file_part)
+                    st.info(f"已接收上傳檔案: {chat_uploaded_file.name}")
+                except Exception as e:
+                    st.error(f"檔案讀取失敗: {e}")
+
+            # (C) 系統提示與標準化數據
+            std_data = results.get('standardization', '')
+            system_prompt_text = f"""
+            你是一位專業且靈活的財務顧問。
+            
+            【資料來源 1】你已經閱讀了這家公司的原始財報 PDF (已附上)。
+            【資料來源 2】以下是我們已經整理好的標準化財務數據：
+            {std_data[:5000]} (節錄)
+            
+            【任務】
+            請根據使用者的問題進行回答。
+            與之前的嚴格分析不同，你可以自由發揮、使用外部知識(如果需要)、並以輕鬆但專業的口吻對話。
+            如果使用者上傳了圖片，請幫忙分析圖片內容。
+            """
+            
+            input_contents.append(system_prompt_text)
+            input_contents.append(f"使用者問題: {prompt}")
+
+            # 3. 呼叫 Chat API (High Temperature)
+            with st.chat_message("assistant"):
+                message_placeholder = st.empty()
+                message_placeholder.markdown("Thinking...")
+                
+                try:
+                    # 這裡使用單次 generate_content 來模擬對話回應 (帶入 history 需更複雜邏輯，這裡簡化為單輪強 Context)
+                    response = call_chat_api(input_contents) 
+                    
+                    if response.get("error"):
+                        full_response = f"❌ 發生錯誤: {response['error']}"
+                    else:
+                        full_response = response["content"]
+                    
+                    message_placeholder.markdown(full_response)
+                    st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+                    
+                except Exception as e:
+                    message_placeholder.markdown(f"Error: {e}")
+
+    # --- 4. 回上頁按鈕 ---
     col_footer, _ = st.columns([1, 4])
     with col_footer:
         if st.button("⬅️ 回到上傳頁面", type="secondary", key="back_to_home_footer"):
             st.session_state['analysis_results'] = None
+            st.session_state['current_pdf_bytes'] = None # 清除緩存
             navigate_to('Home')
 
 
 # =============================================================================
-# 5. API 呼叫函數 (【V5.5 升級】使用 gemini-3.0-pro)
+# 5. API 呼叫函數 (V5.6)
 # =============================================================================
 
 def call_multimodal_api(file_content_bytes, prompt, use_search=False):
-    """
-    呼叫 Gemini API 處理多模態輸入 (PDF + Prompt)
-    """
+    """標準分析用 (Temperature=0.0)"""
     global CLIENT 
-    if CLIENT is None:
-        return {"error": GLOBAL_CONFIG_ERROR}
+    if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
     
     try:
-        pdf_part = types.Part.from_bytes(
-            data=file_content_bytes,
-            mime_type='application/pdf'
-        )
-    except Exception as e:
-        return {"error": f"PDF 檔案處理失敗: {e}"} 
+        pdf_part = types.Part.from_bytes(data=file_content_bytes, mime_type='application/pdf')
+    except Exception as e: return {"error": f"PDF 檔案處理失敗: {e}"} 
 
     contents = [pdf_part, prompt] 
     tools_config = [{"google_search": {}}] if use_search else None
-    config = types.GenerateContentConfig(
-        temperature=0.0,
-        tools=tools_config
-    )
+    config = types.GenerateContentConfig(temperature=0.0, tools=tools_config) # 嚴格模式
 
-    MAX_RETRIES = 3
-    backoff_factor = 2 
-
-    for attempt in range(MAX_RETRIES + 1): 
+    for attempt in range(4): 
         try:
-            response = CLIENT.models.generate_content(
-                model='gemini-3.0-pro', 
-                contents=contents,
-                config=config 
-            )
+            response = CLIENT.models.generate_content(model='gemini-3.0-pro', contents=contents, config=config)
             return {"status": "success", "content": response.text}
-        
-        except APIError as e:
-            status_code = getattr(e, 'status_code', '未知')
-            error_type = e.__class__.__name__
-            if attempt == MAX_RETRIES:
-                return {"error": f"Gemini API 呼叫失敗 (已重試 {MAX_RETRIES} 次): 狀態碼 {status_code}。錯誤: {error_type}。"}
-            wait_time = backoff_factor ** (attempt + 1)
-            st.warning(f"API 呼叫失敗 ({error_type})，將在 {wait_time} 秒後重試 (第 {attempt + 1}/{MAX_RETRIES} 次)...")
-            time.sleep(wait_time)
-        
         except Exception as e:
-            return {"error": f"發生未知運行錯誤: {e.__class__.__name__}: {e}"}
-    
-    return {"error": "多模態 API 呼叫的重試邏輯意外結束。"}
-
+            if attempt == 3: return {"error": str(e)}
+            time.sleep(2)
 
 def call_text_api(input_text, prompt):
-    """
-    呼叫 Gemini API 處理純文字輸入 (Text + Prompt)
-    """
+    """純文字分析用 (Temperature=0.0)"""
     global CLIENT 
-    if CLIENT is None:
-        return {"error": GLOBAL_CONFIG_ERROR}
+    if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
 
     contents = [input_text, prompt] 
+    config = types.GenerateContentConfig(temperature=0.0, tools=None) # 嚴格模式
+
+    for attempt in range(4):
+        try:
+            response = CLIENT.models.generate_content(model='gemini-3.0-pro', contents=contents, config=config)
+            return {"status": "success", "content": response.text}
+        except Exception as e:
+            if attempt == 3: return {"error": str(e)}
+            time.sleep(2)
+
+def call_chat_api(contents):
+    """【新增】對話專用 API (Temperature=1.2, 高自由度)"""
+    global CLIENT 
+    if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
+
+    # 設定較高的 Temperature 讓 AI 更有創意與對話感
     config = types.GenerateContentConfig(
-        temperature=0.0,
-        tools=None 
+        temperature=1.2, 
+        tools=[{"google_search": {}}] # 允許對話時上網搜尋補充資訊
     )
 
-    MAX_RETRIES = 3
-    backoff_factor = 2 
-
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            response = CLIENT.models.generate_content(
-                model='gemini-3.0-pro', 
-                contents=contents,
-                config=config 
-            )
-            return {"status": "success", "content": response.text}
-        
-        except APIError as e:
-            status_code = getattr(e, 'status_code', '未知')
-            error_type = e.__class__.__name__
-            if attempt == MAX_RETRIES:
-                return {"error": f"Gemini API G呼叫失敗 (已重試 {MAX_RETRIES} 次): 狀態碼 {status_code}。錯誤: {error_type}。"}
-            wait_time = backoff_factor ** (attempt + 1)
-            st.warning(f"API 呼叫失敗 ({error_type})，將在 {wait_time} 秒後重試 (第 {attempt + 1}/{MAX_RETRIES} 次)...")
-            time.sleep(wait_time)
-        
-        except Exception as e:
-            return {"error": f"發生未知運行錯誤: {e.__class__.__name__}: {e}"}
-
-    return {"error": "文字 API 呼叫的重試邏輯意外結束。"}
-
+    try:
+        response = CLIENT.models.generate_content(
+            model='gemini-3.0-pro', 
+            contents=contents, 
+            config=config
+        )
+        return {"status": "success", "content": response.text}
+    except Exception as e:
+        return {"error": str(e)}
 
 # =============================================================================
 # 6. 運行主邏輯
