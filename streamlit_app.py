@@ -23,10 +23,12 @@ MODEL_NAME = "gemini-3-pro-preview"
 if 'ui_theme' not in st.session_state:
     st.session_state['ui_theme'] = '跟隨系統'
 if 'is_processing' not in st.session_state:
-    st.session_state['is_processing'] = False  # 關鍵：處理狀態旗標
+    st.session_state['is_processing'] = False
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # =============================================================================
-# 1. 頁面配置與 CSS 雙軌隔離設計
+# 1. 頁面配置與 CSS (V7.6: Messenger 風格 + Typing 動畫)
 # =============================================================================
 
 st.set_page_config(
@@ -35,7 +37,43 @@ st.set_page_config(
     layout="wide",
 )
 
-# 注入 CSS (雙軌制：V6.3暗色 + V6.9亮色)
+# 定義「輸入中...」的三個跳動圓點 HTML/CSS
+TYPING_ANIMATION_CSS = """
+<style>
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        height: 24px;
+    }
+    .typing-dot {
+        width: 8px;
+        height: 8px;
+        margin: 0 2px;
+        background-color: #b0b0b0; /* 預設灰 */
+        border-radius: 50%;
+        animation: typing 1.4s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    
+    @keyframes typing {
+        0%, 80%, 100% { transform: scale(0); opacity: 0.5;}
+        40% { transform: scale(1); opacity: 1;}
+    }
+    
+    /* 根據主題調整圓點顏色 */
+    [data-theme="dark"] .typing-dot { background-color: #ffd700; } /* 暗色模式金點 */
+    [data-theme="light"] .typing-dot { background-color: #7b2cbf; } /* 亮色模式紫點 */
+</style>
+<div class="typing-indicator">
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+</div>
+"""
+
+# 注入主 CSS
 CSS_BASE = """
     /* 隱藏預設元素 */
     header[data-testid="stHeader"] {display: none;}
@@ -50,7 +88,7 @@ CSS_BASE = """
     }
     .settings-btn:hover { transform: rotate(90deg); }
 
-    /* 分析中狀態文字 */
+    /* 分析中狀態文字 (左上角) */
     .processing-indicator {
         color: #d4af37; font-weight: bold; font-family: monospace; animation: pulse 1.5s infinite;
         text-align: center; padding: 10px; border: 1px solid #d4af37; border-radius: 10px;
@@ -89,6 +127,7 @@ CSS_DARK = """
         background-size: 200% auto !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important;
         text-shadow: 0 2px 15px rgba(157, 78, 221, 0.6) !important; animation: sheen 3s linear infinite !important;
     }
+    /* 卡片光暈 */
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
         background: rgba(40, 20, 60, 0.4) !important; backdrop-filter: blur(10px) !important;
         border: 2px solid rgba(255, 215, 0, 0.3) !important; border-radius: 20px !important; padding: 30px !important;
@@ -102,12 +141,21 @@ CSS_DARK = """
     .stTextInput input, .stChatInput textarea, .stFileUploader {
         background-color: rgba(20, 10, 30, 0.6) !important; border: 2px solid #9D4EDD !important; color: #FFD700 !important;
     }
+    
+    /* V7.6 對話氣泡 - Messenger Dark 風格 */
     .stChatMessage[data-testid="stChatMessageUser"] {
-        background: linear-gradient(135deg, #7B2CBF, #9D4EDD) !important; border: 1px solid #FFD700 !important;
+        background: linear-gradient(135deg, #7B2CBF, #9D4EDD) !important;
+        border: none !important;
+        border-radius: 18px 18px 4px 18px !important; /* 圓角調整 */
+        margin-left: 20% !important; /* 靠右壓縮 */
     }
     .stChatMessage[data-testid="stChatMessageAssistant"] {
-        background: rgba(40, 40, 45, 0.95) !important; border: 1px solid #D4AF37 !important; color: #f0f0f0 !important;
+        background: rgba(60, 60, 60, 0.8) !important; 
+        border: 1px solid #D4AF37 !important; color: #f0f0f0 !important;
+        border-radius: 18px 18px 18px 4px !important; /* 圓角調整 */
+        margin-right: 20% !important; /* 靠左壓縮 */
     }
+
     .fixed-watermark {
         background: linear-gradient(to right, #FFD700, #FFF, #9D4EDD) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important;
         filter: drop-shadow(0 0 5px rgba(255,215,0,0.5));
@@ -149,14 +197,21 @@ CSS_LIGHT = """
     .stTextInput input, .stChatInput textarea, .stFileUploader {
         background-color: rgba(255,255,255,0.8) !important; border: 2px solid #dcdcdc !important; color: #4a1a88 !important; border-radius: 12px !important;
     }
+    
+    /* V7.6 對話氣泡 - Messenger Light 風格 */
     .stChatMessage[data-testid="stChatMessageUser"] {
-        background: linear-gradient(135deg, #9d4edd, #c77dff) !important; color: white !important;
-        border-radius: 20px 20px 2px 20px !important;
+        background: linear-gradient(135deg, #9d4edd, #c77dff) !important; 
+        color: white !important;
+        border-radius: 18px 18px 4px 18px !important;
+        margin-left: 20% !important;
     }
     .stChatMessage[data-testid="stChatMessageAssistant"] {
-        background: #ffffff !important; border: 2px solid #e0aa3e !important; color: #2e1065 !important;
-        border-radius: 20px 20px 20px 2px !important;
+        background: #ffffff !important; 
+        border: 1px solid #e0aa3e !important; color: #2e1065 !important;
+        border-radius: 18px 18px 18px 4px !important;
+        margin-right: 20% !important;
     }
+
     .royal-divider::before, .royal-divider::after { background: linear-gradient(to right, transparent, #b8860b, transparent) !important; }
     .royal-divider-icon { color: #b8860b; }
     .fixed-watermark {
@@ -171,6 +226,9 @@ CSS_STRUCTURE = """
     .royal-divider { display: flex; align-items: center; margin: 40px 0; justify-content: center; }
     .royal-divider::before, .royal-divider::after { content: ""; width: 40%; height: 2px; display: block; }
     .royal-divider-icon { padding: 0 15px; font-size: 1.5rem; }
+    
+    /* V7.5 優化：對話輸入框區域的垂直置中 */
+    div[data-testid="column"] { display: flex; flex-direction: column; justify-content: center; }
 """
 
 # 決定 CSS 注入邏輯
@@ -195,26 +253,29 @@ st.markdown(keep_alive, unsafe_allow_html=True)
 
 
 # =============================================================================
-# 2. 核心提示詞 (完整版)
+# 2. 核心提示詞 (完整還原版 V5.8)
 # =============================================================================
 
 PROMPT_COMPANY_NAME = textwrap.dedent("""
 請從這份 PDF 財務報告的第一頁或封面頁中，提取出完整的、官方的公司法定全名 (例如 "台灣積體電路製造股份有限公司")。
-限制：僅輸出公司名稱的純文字字串。
+
+限制：
+1. 僅輸出公司名稱的純文字字串。
+2. 禁止包含任何 Markdown、引號、標籤或任何 "公司名稱：" 之類的前綴。
+3. 禁止包含任何其他文字或問候語。
 """)
 
 PROMPT_BIAO_ZHUN_HUA_CONTENT = textwrap.dedent("""
 **請以以下標準來對財報四大表後有項目標號的數十項內容提取資料，並將以下 37 個大項各自生成獨立的 Markdown 表格** (溫度為0)
-**限制0：禁止包含任何前言、開場白、問候語或免責聲明。您的回答必須直接開始於所要求的第一個 Markdown 表格 (例如 '## 公司沿革')。**
+**限制0：禁止包含任何前言、開場白、問候語或免責聲明 (例如 "好的，這..."). 您的回答必須直接開始於所要求的第一個 Markdown 表格 (例如 '## 公司沿革')。**
 限制1：如果標準化之規則財報中無該分類，跳過該分類
 **限制2：輸出時嚴禁包含編號 (例如 '一、' 或 '1.')。請直接以 Markdown 標題 (例如 '## 公司沿革') 開始，絕對不要輸出 37 項規則的編號。**
-限制3：與變動金額有關的內容，橫軸為時間線與變動比率，縱軸為項目
+限制3：與變動金額有關的內容，橫軸為時間線與變動比率，縱軸為項目，如果橫軸
 限制4：只能使用我們提供的檔案，不能使用外部資訊
-限制5：計算時在內部進行雙重核對
+限制5：計算時在內部進行雙重核對，確保兩組計算，只使用提供資料且結果完全一致後，才可以輸出內容
 限制6：如果有資料缺漏導致無法計算，缺漏的部分不做計算
-**限制7：每一個大項都必須是一個獨立的 Markdown 表格。**
+**限制7.：每一個大項 (例如 '公司沿革', '現金及約當現金') 都必須是一個獨立的 Markdown 表格。如果一個大項下有多個要求事項 (例如 '應收票據及帳款淨額' 下有 '應收帳款淨額三期變動' 和 '帳齡分析表三期變動')，請在同一個表格中用多行來呈現，或生成多個表格。**
 限制8：禁止提供任何外部資訊
-
 一、公司沿革,公司名稱,成立日期[yyy/mm/dd],從事業務
 二、通過財務報告之日期及程序,核准日期[yyy/mm/dd]
 三、新發布及修訂準則及解釋之適用,新發布及修訂準則及解釋之適用對本公司之影響
@@ -302,7 +363,7 @@ PROMPT_RATIO_CONTENT = textwrap.dedent("""
 PROMPT_ZONG_JIE_CONTENT = textwrap.dedent("""
 核心規則與限制
 限制部分：
-**格式限制：禁止包含任何前言、開場白、問候語或免責聲明。您的回答必須直接開始於總結的第一句話。**
+**格式限制：禁止包含任何前言、開場白、問候語或免責聲明 (例如 "好的，這是一份..."）。您的回答必須直接開始於總結的第一句話。**
 資料來源限制：僅能使用標準化後的內容表格及財報附註中已提取的文字資訊進行分析,排除對合併資產負債表、合併綜合損益表、合併權益變動表及合併現金流量表四大表本身數據的直接讀取與分析。
 數據提取限制：所有分析所需的原始數據與金額，必須從標準化表格中已計算或已提取的結果取得,確保分析的立論點是基於前一步驟的數據整理成果。
 分析深度限制：分析內容僅限於揭露與觀察事實與數據變動，禁止提供任何形式的投資或經營建議或評價,恪守中立客觀的立場，僅對資訊進行解讀與歸納。
@@ -494,12 +555,12 @@ def run_analysis_flow(file_content_to_send, status_container):
         }
         time.sleep(0.5)
         st.session_state['current_page'] = 'Report' 
+        
+    except Exception as e:
+        st.error(f"❌ 分析流程中斷：\n{e}")
+    finally:
         st.session_state['is_processing'] = False 
         st.rerun()
-
-    except Exception as e:
-        st.session_state['is_processing'] = False
-        st.error(f"❌ 分析流程中斷：\n{e}")
 
 # =============================================================================
 # 4. 彈窗設定系統
@@ -510,6 +571,7 @@ def open_settings_dialog():
     tab_gen, tab_data, tab_about = st.tabs(["⚙️ 一般設定", "🧹 資料管理", "ℹ️ 關於系統"])
     
     with tab_gen:
+        # 主題切換
         current_theme_index = ["跟隨系統", "極致黑金 (Dark)", "皇家白金 (Light)"].index(st.session_state.get('ui_theme', '跟隨系統'))
         new_theme = st.radio(
             "🎨 介面主題", 
@@ -537,7 +599,7 @@ def open_settings_dialog():
             st.rerun()
             
     with tab_about:
-        st.markdown("### AI 財報分析系統 v7.3")
+        st.markdown("### AI 財報分析系統 v7.6")
         st.write("由 K.R. Design 開發")
         st.write("本系統使用 Google Gemini Pro 模型進行財務報表之自動化分析與解讀。")
         st.caption("Copyright © 2025 K.R. All Rights Reserved.")
@@ -606,50 +668,88 @@ def home_page():
 
 def report_page():
     res = st.session_state.get('analysis_results')
-    if not res:
-        st.info("請先進行分析。")
-        if st.button("⬅️ 回首頁"): 
+    # V7.5: 更嚴格的數據防呆
+    if not res or not isinstance(res, dict):
+        st.info("⏳ 數據正在處理中，或請重新開始分析。")
+        if st.button("⬅️ 回首頁", type="secondary"): 
             st.session_state['current_page'] = 'Home'
             st.rerun()
         return
     
     render_custom_header(f"📜 **{res.get('company_name', '未命名公司')}** 財報分析")
     
-    # 1. 財務比率 (新增防呆檢查)
+    # 1. 財務比率 (【V7.5】排版邏輯回歸 V5.8)
     with st.container():
         st.subheader("💎 關鍵財務比率")
         ratio_txt = res.get('ratio')
         
-        if ratio_txt:
+        if ratio_txt and isinstance(ratio_txt, str):
+            # 嘗試解析表格
             tables = [t.strip() for t in ratio_txt.split('\n\n') if t.strip().startswith('|') and '---' in t]
-            key_map = {'ROE': '股東權益報酬率', 'Net Profit': '淨利率', 'Gross Profit': '毛利率','P/E': '本益比', 'Current Ratio': '流動比率', 'Debt Ratio': '負債比率', 'Quick Ratio': '速動比率'}
             
-            cols = st.columns(3) + st.columns(4)
-            shown_count = 0
-            for t in tables:
-                for k, v in key_map.items():
-                    if k in t or v in t:
-                        if shown_count < 7:
-                            with cols[shown_count]: st.markdown(t, unsafe_allow_html=True)
-                            shown_count += 1
-                        break
-            if shown_count == 0: st.markdown(ratio_txt)
+            # 建立比率映射表
+            ratio_map = {}
+            for table_md in tables:
+                first_line = table_md.split('\n')[0]
+                if '本益比' in first_line: ratio_map['P/E Ratio'] = table_md
+                elif '淨利率' in first_line: ratio_map['Net Profit Margin'] = table_md
+                elif '毛利率' in first_line: ratio_map['Gross Profit Margin'] = table_md
+                elif '股東權益報酬率' in first_line or 'ROE' in first_line: ratio_map['ROE'] = table_md
+                elif '流動比率' in first_line: ratio_map['Current Ratio'] = table_md
+                elif '負債比率' in first_line: ratio_map['Debt Ratio'] = table_md
+                elif '速動比率' in first_line: ratio_map['Quick Ratio'] = table_md
+            
+            # V7.5: 嚴格執行 3x4 排版，確保位置固定
+            ORDERED_RATIOS = [
+                ('ROE', '股東權益報酬率'), ('Net Profit Margin', '淨利率'), ('Gross Profit Margin', '毛利率'),
+                ('P/E Ratio', '本益比'), ('Current Ratio', '流動比率'), ('Debt Ratio', '負債比率'), ('Quick Ratio', '速動比率')
+            ]
+
+            col1, col2, col3 = st.columns(3)
+            cols_row1 = [col1, col2, col3]
+            col4, col5, col6, col7 = st.columns(4)
+            cols_row2 = [col4, col5, col6, col7]
+            all_cols = cols_row1 + cols_row2
+            
+            # 逐一填入
+            for i, (key, _) in enumerate(ORDERED_RATIOS):
+                if i < len(all_cols):
+                    with all_cols[i]:
+                        st.markdown(ratio_map.get(key, f"**{key} 數據未生成**"), unsafe_allow_html=True)
         else:
             st.warning("⚠️ 無法讀取財務比率數據，請重新嘗試分析。")
 
     royal_divider("🤖")
     
-    # 2. AI 對話室引導
+    # 2. AI 對話室引導 (V7.6: 移除說明文字，直接輸入)
     with st.container():
         st.markdown("### 🤖 AI 首席顧問")
-        st.info("💡 如果您對報告中的數據有任何疑問，請使用下方的聊天室，AI 顧問將為您詳細解答。")
-        if st.button("💬 進入 AI 戰情室 (自由對話模式)", type="primary", use_container_width=True):
-            st.session_state['current_page'] = 'Chat'
-            st.rerun()
+        c_input, c_btn = st.columns([5, 1])
+        with c_input:
+            quick_q = st.text_input("快速提問...", placeholder="例如：請解釋為什麼存貨增加？", label_visibility="collapsed")
+        with c_btn:
+            if st.button("開始對話 ➤", type="primary", use_container_width=True):
+                if quick_q:
+                    st.session_state.chat_history.append({"role": "user", "content": quick_q})
+                    inputs = []
+                    if st.session_state.get('current_pdf_bytes'):
+                        try: inputs.append(types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf'))
+                        except: pass
+                    
+                    std_data = res.get('standardization', '')
+                    sys_prompt = f"你是一位專業、客觀且經驗豐富的財務顧問。已附上原始財報PDF與標準化數據摘要:\n{std_data[:3000]}...\n請回答使用者問題：{quick_q}"
+                    inputs.append(sys_prompt)
+                    
+                    st.session_state['pending_query'] = inputs 
+                    st.session_state['current_page'] = 'Chat'
+                    st.rerun()
+                else:
+                    st.session_state['current_page'] = 'Chat'
+                    st.rerun()
 
     royal_divider("📄")
 
-    # 3. 三大分頁 (新增防呆檢查)
+    # 3. 三大分頁
     with st.container():
         t1, t2, t3 = st.tabs(["📄 專業審計總結", "🗣️ 白話文數據講解", "📊 標準化資訊提取"])
         with t1: st.markdown(res.get('summary', '⚠️ 數據遺失'))
@@ -658,7 +758,8 @@ def report_page():
     
     royal_divider("⬅️")
     
-    if st.button("⬅️ 結束閱覽，返回首頁", kind="secondary"):
+    # V7.5: 修正 Button Type 錯誤
+    if st.button("⬅️ 結束閱覽，返回首頁", type="secondary"):
         st.session_state['analysis_results'] = None
         st.session_state['current_pdf_bytes'] = None
         st.session_state['current_page'] = 'Home'
@@ -686,6 +787,21 @@ def chat_page():
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
+        # V7.6: 處理快速提問，使用 HTML Typing 動畫
+        if 'pending_query' in st.session_state:
+            pending_inputs = st.session_state.pop('pending_query')
+            with st.chat_message("assistant"):
+                placeholder = st.empty()
+                # 顯示三個跳動圓點
+                placeholder.markdown(TYPING_ANIMATION_CSS, unsafe_allow_html=True)
+                
+                response = call_chat_api(pending_inputs)
+                reply = f"❌ 錯誤: {response['error']}" if response.get("error") else response["content"]
+                
+                placeholder.markdown(reply)
+                st.session_state.chat_history.append({"role": "assistant", "content": reply})
+            st.rerun() 
+
         with st.expander("📎 上傳輔助圖片/截圖 (選用)"):
             chat_uploaded_img = st.file_uploader("選擇圖片文件...", type=["png", "jpg", "jpeg"], key="chat_img_up")
 
@@ -703,17 +819,21 @@ def chat_page():
              except: pass
 
         res = st.session_state.get('analysis_results', {})
-        std_data = res.get('standardization', '')
+        std_data = res.get('standardization', '') if res else ''
         
         sys_prompt = f"你是一位專業、客觀且經驗豐富的財務顧問。已附上原始財報PDF與標準化數據摘要:\n{std_data[:3000]}...\n請回答使用者問題：{prompt}"
         inputs.append(sys_prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("🟣 顧問正在思考中..."):
-                response = call_chat_api(inputs)
-                reply = f"❌ 錯誤: {response['error']}" if response.get("error") else response["content"]
-                st.markdown(reply)
-                st.session_state.chat_history.append({"role": "assistant", "content": reply})
+            placeholder = st.empty()
+            # 顯示三個跳動圓點
+            placeholder.markdown(TYPING_ANIMATION_CSS, unsafe_allow_html=True)
+            
+            response = call_chat_api(inputs)
+            reply = f"❌ 錯誤: {response['error']}" if response.get("error") else response["content"]
+            
+            placeholder.markdown(reply)
+            st.session_state.chat_history.append({"role": "assistant", "content": reply})
 
 # =============================================================================
 # 6. 主程式入口
