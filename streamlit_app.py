@@ -28,7 +28,7 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # =============================================================================
-# 1. 頁面配置與 CSS (V7.6: Messenger 風格 + Typing 動畫)
+# 1. 頁面配置與 CSS (V8.1: 頁面跳轉 + 天藍色獨立頁面)
 # =============================================================================
 
 st.set_page_config(
@@ -41,30 +41,22 @@ st.set_page_config(
 TYPING_ANIMATION_CSS = """
 <style>
     .typing-indicator {
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        height: 24px;
+        display: flex; align-items: center; justify-content: flex-start;
+        height: 24px; padding-left: 10px;
     }
     .typing-dot {
-        width: 8px;
-        height: 8px;
-        margin: 0 2px;
-        background-color: #b0b0b0; /* 預設灰 */
-        border-radius: 50%;
+        width: 8px; height: 8px; margin: 0 2px;
+        background-color: #b0b0b0; border-radius: 50%;
         animation: typing 1.4s infinite ease-in-out both;
     }
     .typing-dot:nth-child(1) { animation-delay: -0.32s; }
     .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-    
     @keyframes typing {
         0%, 80%, 100% { transform: scale(0); opacity: 0.5;}
         40% { transform: scale(1); opacity: 1;}
     }
-    
-    /* 根據主題調整圓點顏色 */
-    [data-theme="dark"] .typing-dot { background-color: #ffd700; } /* 暗色模式金點 */
-    [data-theme="light"] .typing-dot { background-color: #7b2cbf; } /* 亮色模式紫點 */
+    [data-theme="dark"] .typing-dot { background-color: #ffd700; }
+    [data-theme="light"] .typing-dot { background-color: #7b2cbf; }
 </style>
 <div class="typing-indicator">
     <div class="typing-dot"></div>
@@ -88,26 +80,32 @@ CSS_BASE = """
     }
     .settings-btn:hover { transform: rotate(90deg); }
 
-    /* 分析中狀態文字 (左上角) */
+    /* 進度條置頂 */
     .processing-indicator {
         color: #d4af37; font-weight: bold; font-family: monospace; animation: pulse 1.5s infinite;
         text-align: center; padding: 10px; border: 1px solid #d4af37; border-radius: 10px;
     }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-    /* 左下角浮水印 */
+    /* 左下角浮水印 (極淡) */
     .fixed-watermark {
         position: fixed; bottom: 20px; left: 25px; font-size: 20px;
         font-family: 'Times New Roman', serif; font-weight: 900; 
         z-index: 9999; pointer-events: none; letter-spacing: 2px;
+        opacity: 0.1 !important; 
     }
 
     /* 動畫 */
     @keyframes sheen { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+    
+    /* V8.1: 表單按鈕對齊 */
+    div[data-testid="stForm"] div[data-testid="column"] > div > div > div > div > div > button {
+        width: 100%; height: 100%; min-height: 46px; margin-top: 0px !important;
+    }
 """
 
 CSS_DARK = """
-    /* 🌑 暗色模式 (V6.3 復刻) */
+    /* 🌑 暗色模式 */
     .stApp {
         background-color: #05020a !important;
         background-image: 
@@ -117,17 +115,11 @@ CSS_DARK = """
         background-attachment: fixed !important;
         color: #e0e0e0 !important;
     }
-    .stApp::before {
-        content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
-        pointer-events: none; z-index: 0; mix-blend-mode: overlay;
-    }
     h1, h2, h3, .big-title {
         background: linear-gradient(to right, #FFD700, #FFC300, #D4AF37, #9D4EDD, #7B2CBF) !important;
         background-size: 200% auto !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important;
-        text-shadow: 0 2px 15px rgba(157, 78, 221, 0.6) !important; animation: sheen 3s linear infinite !important;
+        text-shadow: 0 2px 15px rgba(157, 78, 221, 0.6) !important; 
     }
-    /* 卡片光暈 */
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
         background: rgba(40, 20, 60, 0.4) !important; backdrop-filter: blur(10px) !important;
         border: 2px solid rgba(255, 215, 0, 0.3) !important; border-radius: 20px !important; padding: 30px !important;
@@ -141,24 +133,20 @@ CSS_DARK = """
     .stTextInput input, .stChatInput textarea, .stFileUploader {
         background-color: rgba(20, 10, 30, 0.6) !important; border: 2px solid #9D4EDD !important; color: #FFD700 !important;
     }
-    
-    /* V7.6 對話氣泡 - Messenger Dark 風格 */
     .stChatMessage[data-testid="stChatMessageUser"] {
-        background: linear-gradient(135deg, #7B2CBF, #9D4EDD) !important;
+        background: linear-gradient(135deg, #7B2CBF, #9D4EDD) !important; 
         border: none !important;
-        border-radius: 18px 18px 4px 18px !important; /* 圓角調整 */
-        margin-left: 20% !important; /* 靠右壓縮 */
+        border-radius: 18px 18px 4px 18px !important;
+        margin-left: 20% !important;
     }
     .stChatMessage[data-testid="stChatMessageAssistant"] {
         background: rgba(60, 60, 60, 0.8) !important; 
         border: 1px solid #D4AF37 !important; color: #f0f0f0 !important;
-        border-radius: 18px 18px 18px 4px !important; /* 圓角調整 */
-        margin-right: 20% !important; /* 靠左壓縮 */
+        border-radius: 18px 18px 18px 4px !important;
+        margin-right: 20% !important;
     }
-
     .fixed-watermark {
         background: linear-gradient(to right, #FFD700, #FFF, #9D4EDD) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important;
-        filter: drop-shadow(0 0 5px rgba(255,215,0,0.5));
     }
     .royal-divider::before, .royal-divider::after { background: linear-gradient(to right, transparent, #FFD700, #9D4EDD, transparent) !important; }
     .royal-divider-icon { color: #FFD700; }
@@ -166,7 +154,7 @@ CSS_DARK = """
 """
 
 CSS_LIGHT = """
-    /* ☀️ 亮色模式 (V6.9 珍珠白金) */
+    /* ☀️ 亮色模式 */
     .stApp {
         background-color: #fdfbf7 !important;
         background-image: 
@@ -179,7 +167,7 @@ CSS_LIGHT = """
     h1, h2, h3, .big-title {
         background: linear-gradient(45deg, #4a1a88, #7b2cbf, #b8860b, #4a1a88) !important;
         background-size: 300% auto !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important;
-        font-weight: 900 !important; padding-bottom: 10px !important; animation: sheen 8s ease infinite !important;
+        font-weight: 900 !important; padding-bottom: 10px !important;
     }
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
         background: rgba(255, 255, 255, 0.75) !important; backdrop-filter: blur(15px) !important;
@@ -197,27 +185,36 @@ CSS_LIGHT = """
     .stTextInput input, .stChatInput textarea, .stFileUploader {
         background-color: rgba(255,255,255,0.8) !important; border: 2px solid #dcdcdc !important; color: #4a1a88 !important; border-radius: 12px !important;
     }
-    
-    /* V7.6 對話氣泡 - Messenger Light 風格 */
     .stChatMessage[data-testid="stChatMessageUser"] {
-        background: linear-gradient(135deg, #9d4edd, #c77dff) !important; 
-        color: white !important;
+        background: linear-gradient(135deg, #9d4edd, #c77dff) !important; color: white !important;
         border-radius: 18px 18px 4px 18px !important;
         margin-left: 20% !important;
     }
     .stChatMessage[data-testid="stChatMessageAssistant"] {
-        background: #ffffff !important; 
-        border: 1px solid #e0aa3e !important; color: #2e1065 !important;
+        background: #ffffff !important; border: 1px solid #e0aa3e !important; color: #2e1065 !important;
         border-radius: 18px 18px 18px 4px !important;
         margin-right: 20% !important;
     }
-
     .royal-divider::before, .royal-divider::after { background: linear-gradient(to right, transparent, #b8860b, transparent) !important; }
     .royal-divider-icon { color: #b8860b; }
     .fixed-watermark {
-        background: linear-gradient(to right, #4a1a88, #b8860b) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; opacity: 0.7 !important;
+        background: linear-gradient(to right, #4a1a88, #b8860b) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important;
     }
     .stTabs [aria-selected="true"] { color: #7B1FA2 !important; border-bottom: 3px solid #7B1FA2 !important; }
+"""
+
+# V8.1 聊天頁面專屬 Sky Blue 風格
+CSS_CHAT_LIGHT_OVERRIDE = """
+    /* 天藍色聊天室氛圍 */
+    .stApp {
+        background-color: #e3f2fd !important; /* 天藍底 */
+        background-image: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+    }
+    div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
+        background: rgba(255, 255, 255, 0.9) !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
+    }
 """
 
 CSS_STRUCTURE = """
@@ -226,8 +223,6 @@ CSS_STRUCTURE = """
     .royal-divider { display: flex; align-items: center; margin: 40px 0; justify-content: center; }
     .royal-divider::before, .royal-divider::after { content: ""; width: 40%; height: 2px; display: block; }
     .royal-divider-icon { padding: 0 15px; font-size: 1.5rem; }
-    
-    /* V7.5 優化：對話輸入框區域的垂直置中 */
     div[data-testid="column"] { display: flex; flex-direction: column; justify-content: center; }
 """
 
@@ -235,12 +230,20 @@ CSS_STRUCTURE = """
 theme_selection = st.session_state.get('ui_theme', '跟隨系統')
 final_css = CSS_BASE + CSS_STRUCTURE
 
+# 判斷是否在聊天頁面
+is_chat_page = st.session_state.get('current_page') == 'Chat'
+
 if theme_selection == '極致黑金 (Dark)':
     final_css += CSS_DARK 
 elif theme_selection == '皇家白金 (Light)':
-    final_css += CSS_LIGHT
+    if is_chat_page:
+        final_css += CSS_LIGHT + CSS_CHAT_LIGHT_OVERRIDE 
+    else:
+        final_css += CSS_LIGHT
 else: # 跟隨系統
     final_css += f"@media (prefers-color-scheme: dark) {{ {CSS_DARK} }} @media (prefers-color-scheme: light) {{ {CSS_LIGHT} }}"
+    if is_chat_page:
+        final_css += f"@media (prefers-color-scheme: light) {{ {CSS_CHAT_LIGHT_OVERRIDE} }}"
 
 st.markdown(f"<style>{final_css}</style>", unsafe_allow_html=True)
 st.markdown('<div class="fixed-watermark">⚜️ (K.R.)</div>', unsafe_allow_html=True)
@@ -267,15 +270,16 @@ PROMPT_COMPANY_NAME = textwrap.dedent("""
 
 PROMPT_BIAO_ZHUN_HUA_CONTENT = textwrap.dedent("""
 **請以以下標準來對財報四大表後有項目標號的數十項內容提取資料，並將以下 37 個大項各自生成獨立的 Markdown 表格** (溫度為0)
-**限制0：禁止包含任何前言、開場白、問候語或免責聲明 (例如 "好的，這..."). 您的回答必須直接開始於所要求的第一個 Markdown 表格 (例如 '## 公司沿革')。**
+**限制0：禁止包含任何前言、開場白、問候語或免責聲明。您的回答必須直接開始於所要求的第一個 Markdown 表格 (例如 '## 公司沿革')。**
 限制1：如果標準化之規則財報中無該分類，跳過該分類
 **限制2：輸出時嚴禁包含編號 (例如 '一、' 或 '1.')。請直接以 Markdown 標題 (例如 '## 公司沿革') 開始，絕對不要輸出 37 項規則的編號。**
-限制3：與變動金額有關的內容，橫軸為時間線與變動比率，縱軸為項目，如果橫軸
+限制3：與變動金額有關的內容，橫軸為時間線與變動比率，縱軸為項目
 限制4：只能使用我們提供的檔案，不能使用外部資訊
-限制5：計算時在內部進行雙重核對，確保兩組計算，只使用提供資料且結果完全一致後，才可以輸出內容
+限制5：計算時在內部進行雙重核對
 限制6：如果有資料缺漏導致無法計算，缺漏的部分不做計算
-**限制7.：每一個大項 (例如 '公司沿革', '現金及約當現金') 都必須是一個獨立的 Markdown 表格。如果一個大項下有多個要求事項 (例如 '應收票據及帳款淨額' 下有 '應收帳款淨額三期變動' 和 '帳齡分析表三期變動')，請在同一個表格中用多行來呈現，或生成多個表格。**
+**限制7：每一個大項都必須是一個獨立的 Markdown 表格。**
 限制8：禁止提供任何外部資訊
+
 一、公司沿革,公司名稱,成立日期[yyy/mm/dd],從事業務
 二、通過財務報告之日期及程序,核准日期[yyy/mm/dd]
 三、新發布及修訂準則及解釋之適用,新發布及修訂準則及解釋之適用對本公司之影響
@@ -363,7 +367,7 @@ PROMPT_RATIO_CONTENT = textwrap.dedent("""
 PROMPT_ZONG_JIE_CONTENT = textwrap.dedent("""
 核心規則與限制
 限制部分：
-**格式限制：禁止包含任何前言、開場白、問候語或免責聲明 (例如 "好的，這是一份..."）。您的回答必須直接開始於總結的第一句話。**
+**格式限制：禁止包含任何前言、開場白、問候語或免責聲明。您的回答必須直接開始於總結的第一句話。**
 資料來源限制：僅能使用標準化後的內容表格及財報附註中已提取的文字資訊進行分析,排除對合併資產負債表、合併綜合損益表、合併權益變動表及合併現金流量表四大表本身數據的直接讀取與分析。
 數據提取限制：所有分析所需的原始數據與金額，必須從標準化表格中已計算或已提取的結果取得,確保分析的立論點是基於前一步驟的數據整理成果。
 分析深度限制：分析內容僅限於揭露與觀察事實與數據變動，禁止提供任何形式的投資或經營建議或評價,恪守中立客觀的立場，僅對資訊進行解讀與歸納。
@@ -462,7 +466,7 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # =============================================================================
-# 3. 核心 API 呼叫
+# 3. 核心 API 呼叫 (SDK 穩定版)
 # =============================================================================
 
 @st.cache_resource
@@ -482,9 +486,11 @@ def call_multimodal_api(file_content_bytes, prompt, use_search=False):
     try:
         pdf_part = types.Part.from_bytes(data=file_content_bytes, mime_type='application/pdf')
     except Exception as e: return {"error": f"PDF 處理失敗: {e}"} 
+    
     contents = [pdf_part, prompt] 
     tools_config = [{"google_search": {}}] if use_search else None
     config = types.GenerateContentConfig(temperature=0.0, tools=tools_config)
+    
     for attempt in range(4): 
         try:
             response = CLIENT.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
@@ -496,12 +502,18 @@ def call_multimodal_api(file_content_bytes, prompt, use_search=False):
 def call_text_api(input_text, prompt):
     global CLIENT 
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
-    contents = [input_text, prompt] 
+    
+    # 簡單防呆：轉字串防止 Pydantic Error (V8.1 Fix)
+    safe_input = str(input_text) if input_text is not None else ""
+    if not safe_input: return {"status": "success", "content": "⚠️ 上一步驟數據遺失"}
+
+    contents = [safe_input, prompt] 
     config = types.GenerateContentConfig(temperature=0.0, tools=None)
+    
     for attempt in range(4):
         try:
             response = CLIENT.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
-            return {"status": "success", "content": response.text}
+            return {"status": "success", "content": response.text if response.text else "⚠️ 生成失敗"}
         except Exception as e:
             if attempt == 3: return {"error": str(e)}
             time.sleep(2)
@@ -509,20 +521,28 @@ def call_text_api(input_text, prompt):
 def call_chat_api(contents):
     global CLIENT 
     if CLIENT is None: return {"error": GLOBAL_CONFIG_ERROR}
+    
+    # 簡單防呆
+    safe_contents = []
+    for c in contents:
+        if isinstance(c, str): safe_contents.append(c)
+        elif c is not None: safe_contents.append(c)
+
     config = types.GenerateContentConfig(temperature=1.2, tools=[{"google_search": {}}])
     try:
-        response = CLIENT.models.generate_content(model=MODEL_NAME, contents=contents, config=config)
+        response = CLIENT.models.generate_content(model=MODEL_NAME, contents=safe_contents, config=config)
         return {"status": "success", "content": response.text}
     except Exception as e:
         return {"error": str(e)}
 
-def run_analysis_flow(file_content_to_send, status_container):
+def run_analysis_flow(file_content_to_send, progress_placeholder):
     st.session_state['is_processing'] = True
     st.session_state['current_pdf_bytes'] = file_content_to_send
     
     try:
-        with st.container():
-            with status_container.status("⏳ 正在執行 AI 分析...", expanded=True) as status:
+        # 進度條置頂
+        with progress_placeholder.container():
+            with st.status("⏳ 正在執行 AI 分析...", expanded=True) as status:
                 st.write("📜 步驟 1/5: 正在識別公司名稱...")
                 name_resp = call_multimodal_api(file_content_to_send, PROMPT_COMPANY_NAME, False)
                 if name_resp.get("error"): raise Exception(name_resp['error'])
@@ -599,7 +619,7 @@ def open_settings_dialog():
             st.rerun()
             
     with tab_about:
-        st.markdown("### AI 財報分析系統 v7.6")
+        st.markdown("### AI 財報分析系統 v8.1 (Reverted)")
         st.write("由 K.R. Design 開發")
         st.write("本系統使用 Google Gemini Pro 模型進行財務報表之自動化分析與解讀。")
         st.caption("Copyright © 2025 K.R. All Rights Reserved.")
@@ -628,11 +648,13 @@ def home_page():
         st.error(GLOBAL_CONFIG_ERROR)
         return
 
+    progress_placeholder = st.empty()
+
     with st.container():
         st.markdown("### ⚡ 快速分析 (範例企業)")
         c1, c2, c3, c4 = st.columns(4)
         target_file = None
-        status_cont = st.empty()
+        status_cont = st.empty() # 備用
         
         is_disabled = st.session_state.get('is_processing', False)
         
@@ -655,20 +677,19 @@ def home_page():
 
     with st.container():
         if target_file and os.path.exists(target_file):
-            with open(target_file, "rb") as f: run_analysis_flow(f.read(), status_cont)
+            with open(target_file, "rb") as f: run_analysis_flow(f.read(), progress_placeholder)
         elif target_file:
             st.error(f"❌ 找不到範例檔案: {target_file}")
         elif uploaded:
             col_start, col_rest = st.columns([1, 2])
             with col_start:
                  if st.button("✨ 開始執行分析", type="primary", use_container_width=True, disabled=is_disabled):
-                    run_analysis_flow(uploaded.read(), status_cont)
+                    run_analysis_flow(uploaded.read(), progress_placeholder)
         else:
             st.info("請先上傳文件或選擇範例以開始。")
 
 def report_page():
     res = st.session_state.get('analysis_results')
-    # V7.5: 更嚴格的數據防呆
     if not res or not isinstance(res, dict):
         st.info("⏳ 數據正在處理中，或請重新開始分析。")
         if st.button("⬅️ 回首頁", type="secondary"): 
@@ -678,16 +699,13 @@ def report_page():
     
     render_custom_header(f"📜 **{res.get('company_name', '未命名公司')}** 財報分析")
     
-    # 1. 財務比率 (【V7.5】排版邏輯回歸 V5.8)
+    # 1. 財務比率
     with st.container():
         st.subheader("💎 關鍵財務比率")
         ratio_txt = res.get('ratio')
         
         if ratio_txt and isinstance(ratio_txt, str):
-            # 嘗試解析表格
             tables = [t.strip() for t in ratio_txt.split('\n\n') if t.strip().startswith('|') and '---' in t]
-            
-            # 建立比率映射表
             ratio_map = {}
             for table_md in tables:
                 first_line = table_md.split('\n')[0]
@@ -699,7 +717,6 @@ def report_page():
                 elif '負債比率' in first_line: ratio_map['Debt Ratio'] = table_md
                 elif '速動比率' in first_line: ratio_map['Quick Ratio'] = table_md
             
-            # V7.5: 嚴格執行 3x4 排版，確保位置固定
             ORDERED_RATIOS = [
                 ('ROE', '股東權益報酬率'), ('Net Profit Margin', '淨利率'), ('Gross Profit Margin', '毛利率'),
                 ('P/E Ratio', '本益比'), ('Current Ratio', '流動比率'), ('Debt Ratio', '負債比率'), ('Quick Ratio', '速動比率')
@@ -711,7 +728,6 @@ def report_page():
             cols_row2 = [col4, col5, col6, col7]
             all_cols = cols_row1 + cols_row2
             
-            # 逐一填入
             for i, (key, _) in enumerate(ORDERED_RATIOS):
                 if i < len(all_cols):
                     with all_cols[i]:
@@ -721,14 +737,20 @@ def report_page():
 
     royal_divider("🤖")
     
-    # 2. AI 對話室引導 (V7.6: 移除說明文字，直接輸入)
+    # 2. AI 對話室引導 (V8.1: Form + Enter 支援 + 紫金按鈕)
     with st.container():
         st.markdown("### 🤖 AI 首席顧問")
-        c_input, c_btn = st.columns([5, 1])
-        with c_input:
-            quick_q = st.text_input("快速提問...", placeholder="例如：請解釋為什麼存貨增加？", label_visibility="collapsed")
-        with c_btn:
-            if st.button("開始對話 ➤", type="primary", use_container_width=True):
+        # 關鍵：使用 Form 來包裹，支援 Enter 鍵
+        with st.form(key="quick_ask_form", clear_on_submit=False):
+            # 佈局：輸入框 (7) + 按鈕 (1)
+            c_input, c_btn = st.columns([7, 1], vertical_alignment="bottom")
+            with c_input:
+                quick_q = st.text_input("快速提問...", placeholder="例如：請解釋為什麼存貨增加？(可按 Enter 送出)", label_visibility="collapsed")
+            with c_btn:
+                # Form Submit Button
+                submitted = st.form_submit_button("開始對話 ➤", type="primary", use_container_width=True)
+
+            if submitted:
                 if quick_q:
                     st.session_state.chat_history.append({"role": "user", "content": quick_q})
                     inputs = []
@@ -744,6 +766,7 @@ def report_page():
                     st.session_state['current_page'] = 'Chat'
                     st.rerun()
                 else:
+                    # 空輸入也跳轉
                     st.session_state['current_page'] = 'Chat'
                     st.rerun()
 
@@ -758,7 +781,6 @@ def report_page():
     
     royal_divider("⬅️")
     
-    # V7.5: 修正 Button Type 錯誤
     if st.button("⬅️ 結束閱覽，返回首頁", type="secondary"):
         st.session_state['analysis_results'] = None
         st.session_state['current_pdf_bytes'] = None
@@ -766,6 +788,7 @@ def report_page():
         st.rerun()
 
 def chat_page():
+    # 頂部導航
     c_back, c_title, c_set = st.columns([1, 10, 1])
     with c_back:
         if st.button("⬅️"):
@@ -787,12 +810,10 @@ def chat_page():
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-        # V7.6: 處理快速提問，使用 HTML Typing 動畫
         if 'pending_query' in st.session_state:
             pending_inputs = st.session_state.pop('pending_query')
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                # 顯示三個跳動圓點
                 placeholder.markdown(TYPING_ANIMATION_CSS, unsafe_allow_html=True)
                 
                 response = call_chat_api(pending_inputs)
@@ -826,7 +847,6 @@ def chat_page():
 
         with st.chat_message("assistant"):
             placeholder = st.empty()
-            # 顯示三個跳動圓點
             placeholder.markdown(TYPING_ANIMATION_CSS, unsafe_allow_html=True)
             
             response = call_chat_api(inputs)
