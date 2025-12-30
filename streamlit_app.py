@@ -14,32 +14,34 @@ from google.genai import errors
 from google.genai.errors import APIError 
 
 # =============================================================================
-# 0. 全域設定
+# 0. 全域設定與初始化
 # =============================================================================
 
 MODEL_NAME = "gemini-3-pro-preview"
 
+# 初始化 Session State (主題預設為跟隨系統)
+if 'ui_theme' not in st.session_state:
+    st.session_state['ui_theme'] = '跟隨系統'
+
 # =============================================================================
-# 1. 頁面配置與 CSS 系統級強制覆寫 (V6.8 核心)
+# 1. CSS 樣式定義 (模組化設計)
 # =============================================================================
 
-st.set_page_config(
-    page_title="AI財報分析系統 (K.R.)",
-    page_icon="⚜️",
-    layout="wide",
-)
-
-# 注入 CSS (使用 @media 查詢直接對接系統設定，解決顯示 BUG)
-st.markdown("""
-<style>
-    /* ==========================================================================
-       通用設定 (隱藏預設元素)
-       ========================================================================== */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+# 通用 CSS (動畫、隱藏原生UI)
+CSS_BASE = """
+    /* 隱藏 Streamlit 原生 Header 與 Footer */
+    header[data-testid="stHeader"] {display: none;}
+    footer {display: none;}
     .stDeployButton {display: none;}
+    
+    /* 強制隱藏預設分隔線 */
     hr { display: none !important; }
     
+    /* 設定按鈕樣式 */
+    .settings-btn {
+        border: none; background: transparent; font-size: 1.5rem; cursor: pointer;
+    }
+
     /* 左下角浮水印 */
     .fixed-watermark {
         position: fixed; bottom: 20px; left: 25px; font-size: 20px;
@@ -47,187 +49,184 @@ st.markdown("""
         z-index: 9999; pointer-events: none; letter-spacing: 2px;
     }
 
-    /* ==========================================================================
-       🌑【暗色模式】(Dark Mode) - 100% 復刻 V6.3 的極致奢華
-       ========================================================================== */
-    @media (prefers-color-scheme: dark) {
-        /* 強制覆蓋 App 背景 */
-        .stApp {
-            background-color: #05020a !important;
-            background-image: 
-                radial-gradient(circle at 20% 30%, rgba(123, 44, 191, 0.2) 0%, transparent 50%),
-                radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.15) 0%, transparent 50%),
-                linear-gradient(135deg, rgba(10, 5, 20, 0.95) 0%, rgba(25, 10, 40, 0.95) 100%) !important;
-            background-attachment: fixed !important;
-            color: #e0e0e0 !important;
-        }
-        /* V6.3 的微光粒子紋理 (Noise Texture) */
-        .stApp::before {
-            content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
-            pointer-events: none; z-index: 0; mix-blend-mode: overlay;
-        }
-
-        /* 暗色-標題 (金紫流光) */
-        h1, h2, h3, .big-title {
-            background: linear-gradient(to right, #FFD700, #FFC300, #D4AF37, #9D4EDD, #7B2CBF) !important;
-            background-size: 200% auto !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            text-shadow: 0 2px 15px rgba(157, 78, 221, 0.6) !important;
-            animation: sheen 3s linear infinite !important;
-        }
-
-        /* 暗色-卡片 (強力光暈 + 毛玻璃) */
-        div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
-            background: rgba(40, 20, 60, 0.4) !important;
-            backdrop-filter: blur(10px) !important;
-            border: 2px solid rgba(255, 215, 0, 0.3) !important;
-            border-radius: 20px !important;
-            padding: 30px !important;
-            box-shadow: 0 0 0 1px rgba(157, 78, 221, 0.3) inset, 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px rgba(123, 44, 191, 0.2) !important;
-            margin-bottom: 25px !important;
-        }
-
-        /* 暗色-按鈕 (寶石質感) */
-        .stButton>button {
-            background: linear-gradient(135deg, #4a1a88 0%, #7B2CBF 100%) !important;
-            color: #FFD700 !important;
-            border: none !important;
-            box-shadow: 0 5px 15px rgba(123, 44, 191, 0.5) !important;
-        }
-
-        /* 暗色-輸入框 */
-        .stTextInput input, .stChatInput textarea, .stFileUploader {
-            background-color: rgba(20, 10, 30, 0.6) !important;
-            border: 2px solid #9D4EDD !important;
-            color: #FFD700 !important;
-        }
-
-        /* 暗色-對話氣泡 */
-        .stChatMessage[data-testid="stChatMessageUser"] {
-            background: linear-gradient(135deg, #7B2CBF, #9D4EDD) !important;
-            border: 1px solid #FFD700 !important;
-        }
-        .stChatMessage[data-testid="stChatMessageAssistant"] {
-            background: rgba(40, 40, 45, 0.95) !important;
-            border: 1px solid #D4AF37 !important;
-            color: #f0f0f0 !important;
-        }
-
-        /* 暗色-浮水印 */
-        .fixed-watermark {
-            background: linear-gradient(to right, #FFD700, #FFF, #9D4EDD) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            filter: drop-shadow(0 0 5px rgba(255,215,0,0.5));
-        }
-        
-        /* 暗色-分隔線 */
-        .royal-divider::before, .royal-divider::after {
-            background: linear-gradient(to right, transparent, #FFD700, #9D4EDD, transparent) !important;
-        }
-        .royal-divider-icon { color: #FFD700; }
-        
-        /* 暗色-Tab */
-        .stTabs [aria-selected="true"] { color: #FFD700 !important; border-bottom: 3px solid #9D4EDD !important; }
-    }
-
-    /* ==========================================================================
-       ☀️【亮色模式】(Light Mode) - 珍珠白金 + 貴氣紫韻 (非死白)
-       ========================================================================== */
-    @media (prefers-color-scheme: light) {
-        .stApp {
-            background-color: #fafafa !important; /* 珍珠白 */
-            /* 柔和的漸層底，帶有極淡的紫色光澤，不刺眼但有質感 */
-            background-image: 
-                linear-gradient(120deg, #fdfbf7 0%, #f3e5f5 100%),
-                radial-gradient(at 0% 0%, rgba(255, 215, 0, 0.1) 0px, transparent 50%), 
-                radial-gradient(at 100% 100%, rgba(157, 78, 221, 0.1) 0px, transparent 50%) !important;
-            background-attachment: fixed !important;
-            color: #2e1065 !important; /* 深皇室紫文字 */
-        }
-
-        /* 亮色-標題 (液態紫金) */
-        h1, h2, h3, .big-title {
-            background: linear-gradient(45deg, #4A148C, #7B1FA2, #D4AF37, #4A148C) !important;
-            background-size: 300% auto !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            font-weight: 900 !important;
-            padding-bottom: 10px !important;
-            animation: sheen 8s ease infinite !important;
-        }
-
-        /* 亮色-卡片 (浮雕白金質感) */
-        div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
-            background: rgba(255, 255, 255, 0.75) !important;
-            backdrop-filter: blur(12px) !important;
-            border-radius: 16px !important;
-            padding: 25px !important;
-            border: 1px solid rgba(157, 78, 221, 0.2) !important; /* 精緻紫邊 */
-            box-shadow: 0 10px 25px rgba(46, 16, 101, 0.05), inset 0 0 20px rgba(255, 255, 255, 0.8) !important;
-            margin-bottom: 20px !important;
-        }
-
-        /* 亮色-按鈕 (紫水晶) */
-        .stButton>button {
-            background: linear-gradient(135deg, #7B1FA2 0%, #9C27B0 100%) !important;
-            color: #FFFFFF !important;
-            border: none !important;
-            border-radius: 12px !important;
-            box-shadow: 0 4px 12px rgba(123, 31, 162, 0.3) !important;
-        }
-        
-        /* 亮色-次要按鈕 */
-        button[kind="secondary"] {
-            background: white !important;
-            border: 2px solid #7B1FA2 !important;
-            color: #7B1FA2 !important;
-        }
-
-        /* 亮色-輸入框 */
-        .stTextInput input, .stChatInput textarea, .stFileUploader {
-            background-color: #FFFFFF !important;
-            border: 1px solid #D4AF37 !important; /* 金邊輸入框 */
-            color: #4A148C !important;
-            border-radius: 10px !important;
-        }
-
-        /* 亮色-對話氣泡 */
-        .stChatMessage[data-testid="stChatMessageUser"] {
-            background: linear-gradient(135deg, #BA68C8, #9C27B0) !important;
-            color: white !important;
-            border-radius: 20px 20px 2px 20px !important;
-        }
-        .stChatMessage[data-testid="stChatMessageAssistant"] {
-            background: #FFFFFF !important;
-            color: #2E1065 !important;
-            border: 1px solid #D4AF37 !important;
-            border-radius: 20px 20px 20px 2px !important;
-        }
-
-        /* 亮色-浮水印 */
-        .fixed-watermark {
-            background: linear-gradient(to right, #4a1a88, #b8860b) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            opacity: 0.7 !important;
-        }
-        
-        /* 亮色-分隔線 */
-        .royal-divider::before, .royal-divider::after {
-            background: linear-gradient(to right, transparent, #b8860b, transparent) !important;
-        }
-        .royal-divider-icon { color: #b8860b; }
-        
-        /* 亮色-Tab */
-        .stTabs [aria-selected="true"] { color: #7B1FA2 !important; border-bottom: 3px solid #7B1FA2 !important; }
-    }
-
-    /* 動畫 Keyframes */
+    /* 動畫定義 */
     @keyframes sheen { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+"""
+
+# 暗色模式 CSS (V6.3 復刻)
+CSS_DARK = """
+    /* 1. 背景 */
+    .stApp {
+        background-color: #05020a !important;
+        background-image: 
+            radial-gradient(circle at 20% 30%, rgba(123, 44, 191, 0.2) 0%, transparent 50%),
+            radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.15) 0%, transparent 50%),
+            linear-gradient(135deg, rgba(10, 5, 20, 0.95) 0%, rgba(25, 10, 40, 0.95) 100%) !important;
+        background-attachment: fixed !important;
+        color: #e0e0e0 !important;
+    }
+    /* 粒子紋理 */
+    .stApp::before {
+        content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+        pointer-events: none; z-index: 0; mix-blend-mode: overlay;
+    }
+
+    /* 2. 標題 (金紫流光) */
+    h1, h2, h3, .big-title {
+        background: linear-gradient(to right, #FFD700, #FFC300, #D4AF37, #9D4EDD, #7B2CBF) !important;
+        background-size: 200% auto !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        text-shadow: 0 2px 15px rgba(157, 78, 221, 0.6) !important;
+        animation: sheen 3s linear infinite !important;
+    }
+
+    /* 3. 卡片 (V6.3 強力光暈) */
+    div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
+        background: rgba(40, 20, 60, 0.4) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 2px solid rgba(255, 215, 0, 0.3) !important;
+        border-radius: 20px !important;
+        padding: 30px !important;
+        box-shadow: 0 0 0 1px rgba(157, 78, 221, 0.3) inset, 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 40px rgba(123, 44, 191, 0.2) !important;
+        margin-bottom: 25px !important;
+    }
+
+    /* 4. 按鈕 */
+    .stButton>button {
+        background: linear-gradient(135deg, #4a1a88 0%, #7B2CBF 100%) !important;
+        color: #FFD700 !important;
+        border: none !important;
+        box-shadow: 0 5px 15px rgba(123, 44, 191, 0.5) !important;
+    }
+
+    /* 5. 輸入框 */
+    .stTextInput input, .stChatInput textarea, .stFileUploader {
+        background-color: rgba(20, 10, 30, 0.6) !important;
+        border: 2px solid #9D4EDD !important;
+        color: #FFD700 !important;
+    }
+
+    /* 6. 對話氣泡 */
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background: linear-gradient(135deg, #7B2CBF, #9D4EDD) !important;
+        border: 1px solid #FFD700 !important;
+    }
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background: rgba(40, 40, 45, 0.95) !important;
+        border: 1px solid #D4AF37 !important;
+        color: #f0f0f0 !important;
+    }
+
+    /* 7. 分隔線與浮水印 */
+    .royal-divider::before, .royal-divider::after {
+        background: linear-gradient(to right, transparent, #FFD700, #9D4EDD, transparent) !important;
+    }
+    .royal-divider-icon { color: #FFD700; }
+    .fixed-watermark {
+        background: linear-gradient(to right, #FFD700, #FFF, #9D4EDD) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        filter: drop-shadow(0 0 5px rgba(255,215,0,0.5));
+    }
     
+    /* 8. Tab */
+    .stTabs [aria-selected="true"] { color: #FFD700 !important; border-bottom: 3px solid #9D4EDD !important; }
+"""
+
+# 亮色模式 CSS (V6.9 珍珠白金)
+CSS_LIGHT = """
+    /* 1. 背景 */
+    .stApp {
+        background-color: #fdfbf7 !important;
+        background-image: 
+            linear-gradient(120deg, #fdfbf7 0%, #f3e5f5 100%),
+            radial-gradient(at 0% 0%, rgba(255, 215, 0, 0.15) 0px, transparent 50%), 
+            radial-gradient(at 100% 100%, rgba(157, 78, 221, 0.15) 0px, transparent 50%) !important;
+        background-attachment: fixed !important;
+        color: #2e1065 !important;
+    }
+
+    /* 2. 標題 */
+    h1, h2, h3, .big-title {
+        background: linear-gradient(45deg, #4a1a88, #7b2cbf, #b8860b, #4a1a88) !important;
+        background-size: 300% auto !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        font-weight: 900 !important;
+        padding-bottom: 10px !important;
+        animation: sheen 8s ease infinite !important;
+    }
+
+    /* 3. 卡片 (浮雕白金) */
+    div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
+        background: rgba(255, 255, 255, 0.75) !important;
+        backdrop-filter: blur(15px) !important;
+        border: 1px solid rgba(157, 78, 221, 0.2) !important;
+        border-radius: 20px !important;
+        padding: 25px !important;
+        box-shadow: 0 10px 30px rgba(100, 50, 150, 0.05), inset 0 0 20px rgba(255, 255, 255, 0.8) !important;
+        margin-bottom: 20px !important;
+    }
+
+    /* 4. 按鈕 (紫水晶) */
+    .stButton>button {
+        background: linear-gradient(135deg, #7b2cbf 0%, #9d4edd 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        box-shadow: 0 5px 15px rgba(123, 44, 191, 0.3) !important;
+    }
+    button[kind="secondary"] {
+        background: transparent !important;
+        border: 2px solid #7b2cbf !important;
+        color: #7b2cbf !important;
+    }
+
+    /* 5. 輸入框 */
+    .stTextInput input, .stChatInput textarea, .stFileUploader {
+        background-color: rgba(255,255,255,0.8) !important;
+        border: 2px solid #dcdcdc !important;
+        color: #4a1a88 !important;
+        border-radius: 12px !important;
+    }
+
+    /* 6. 對話氣泡 */
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background: linear-gradient(135deg, #9d4edd, #c77dff) !important;
+        color: white !important;
+        border-radius: 20px 20px 2px 20px !important;
+    }
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background: #ffffff !important;
+        border: 2px solid #e0aa3e !important;
+        color: #2e1065 !important;
+        border-radius: 20px 20px 20px 2px !important;
+    }
+
+    /* 7. 分隔線與浮水印 */
+    .royal-divider::before, .royal-divider::after {
+        background: linear-gradient(to right, transparent, #b8860b, transparent) !important;
+    }
+    .royal-divider-icon { color: #b8860b; }
+    .fixed-watermark {
+        background: linear-gradient(to right, #4a1a88, #b8860b) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        opacity: 0.7 !important;
+    }
+    
+    /* 8. Tab */
+    .stTabs [aria-selected="true"] { color: #7B1FA2 !important; border-bottom: 3px solid #7B1FA2 !important; }
+"""
+
+# Tab 共用結構與分隔線結構
+CSS_STRUCTURE = """
+    /* Tab 共用結構 */
+    .stTabs [data-baseweb="tab-list"] { background: transparent !important; gap: 15px !important; }
+    .stTabs [data-baseweb="tab"] { border: none !important; font-weight: 800 !important; font-size: 1.1rem !important; }
+
     /* 分隔線結構 */
     .royal-divider {
         display: flex; align-items: center; margin: 40px 0; justify-content: center;
@@ -236,18 +235,32 @@ st.markdown("""
         content: ""; width: 40%; height: 2px; display: block;
     }
     .royal-divider-icon { padding: 0 15px; font-size: 1.5rem; }
+"""
 
-</style>
-<div class="fixed-watermark">⚜️ K.R. DESIGN</div>
-""", unsafe_allow_html=True)
+# 頁面配置
+st.set_page_config(
+    page_title="AI財報分析系統 (K.R.)",
+    page_icon="⚜️",
+    layout="wide",
+)
 
-# 裝飾分隔線
+# 根據 Session State 決定注入哪種 CSS
+theme_selection = st.session_state['ui_theme']
+final_css = CSS_BASE + CSS_STRUCTURE
+
+if theme_selection == '極致黑金 (Dark)':
+    final_css += CSS_DARK
+elif theme_selection == '皇家白金 (Light)':
+    final_css += CSS_LIGHT
+else: # 跟隨系統 (使用 @media)
+    final_css += f"@media (prefers-color-scheme: dark) {{ {CSS_DARK} }} @media (prefers-color-scheme: light) {{ {CSS_LIGHT} }}"
+
+st.markdown(f"<style>{final_css}</style>", unsafe_allow_html=True)
+st.markdown('<div class="fixed-watermark">⚜️ (K.R.)</div>', unsafe_allow_html=True)
+
+# 裝飾分隔線函數
 def royal_divider(icon="⚜️"):
-    st.markdown(f"""
-    <div class="royal-divider">
-        <span class="royal-divider-icon">{icon}</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div class="royal-divider"><span class="royal-divider-icon">{icon}</span></div>""", unsafe_allow_html=True)
 
 keep_alive = """<script>setInterval(() => { fetch(window.location.href, {mode: 'no-cors'}); }, 300000);</script>"""
 st.markdown(keep_alive, unsafe_allow_html=True)
@@ -259,7 +272,11 @@ st.markdown(keep_alive, unsafe_allow_html=True)
 
 PROMPT_COMPANY_NAME = textwrap.dedent("""
 請從這份 PDF 財務報告的第一頁或封面頁中，提取出完整的、官方的公司法定全名 (例如 "台灣積體電路製造股份有限公司")。
-限制：僅輸出公司名稱的純文字字串。
+
+限制：
+1. 僅輸出公司名稱的純文字字串。
+2. 禁止包含任何 Markdown、引號、標籤或任何 "公司名稱：" 之類的前綴。
+3. 禁止包含任何其他文字或問候語。
 """)
 
 PROMPT_BIAO_ZHUN_HUA_CONTENT = textwrap.dedent("""
@@ -460,7 +477,7 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # =============================================================================
-# 3. 核心 API 呼叫 (功能不變)
+# 3. 核心 API 呼叫
 # =============================================================================
 
 @st.cache_resource
@@ -515,11 +532,9 @@ def call_chat_api(contents):
         return {"error": str(e)}
 
 def run_analysis_flow(file_content_to_send, status_container):
-    """執行分析流程 (V6.8: 專業文字 + 華麗UI)"""
     st.session_state['current_pdf_bytes'] = file_content_to_send
     
     try:
-        # 使用 container 包裹狀態列，應用卡片樣式
         with st.container():
             with status_container.status("⏳ 正在執行 AI 分析...", expanded=True) as status:
                 st.write("📜 步驟 1/5: 正在識別公司名稱...")
@@ -560,15 +575,63 @@ def run_analysis_flow(file_content_to_send, status_container):
         st.error(f"❌ 分析流程中斷：\n{e}")
 
 # =============================================================================
-# 4. 頁面邏輯 (V6.8: 專業文字 UI)
+# 4. 彈窗設定系統 (V7.1 新增主題切換)
 # =============================================================================
 
-def home_page():
-    with st.container():
-        st.markdown("<h1 style='text-align: center;'>🏛️ AI 智能財報分析系統</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 1.1rem; opacity: 0.8;'>融合頂尖多模態 AI 技術，提供深度數據提取、專業比率計算，以及審計級與白話文雙視角報告。</p>", unsafe_allow_html=True)
+@st.dialog("系統設定")
+def open_settings_dialog():
+    tab_gen, tab_data, tab_about = st.tabs(["⚙️ 一般設定", "🧹 資料管理", "ℹ️ 關於系統"])
+    
+    with tab_gen:
+        # 主題切換 (關鍵功能)
+        new_theme = st.radio(
+            "🎨 介面主題", 
+            ["跟隨系統", "極致黑金 (Dark)", "皇家白金 (Light)"],
+            index=["跟隨系統", "極致黑金 (Dark)", "皇家白金 (Light)"].index(st.session_state['ui_theme']),
+            horizontal=True
+        )
+        if new_theme != st.session_state['ui_theme']:
+            st.session_state['ui_theme'] = new_theme
+            st.rerun() # 立即刷新應用新主題
 
+        st.divider()
+        st.checkbox("啟用進階推理模式 (Beta)", value=True, help="使用更強的模型進行分析")
+        st.checkbox("分析完成後自動播放音效", value=False)
+        # 語言選項已移除
+        
+    with tab_data:
+        st.warning("注意：清除資料將無法復原")
+        if st.button("清除所有分析紀錄", type="primary"):
+            st.session_state['analysis_results'] = None
+            st.session_state['chat_history'] = []
+            st.session_state['current_pdf_bytes'] = None
+            st.success("已清除所有暫存資料！")
+            time.sleep(1)
+            st.rerun()
+            
+    with tab_about:
+        st.markdown("### AI 財報分析系統 v7.1")
+        st.write("由 K.R. Design 開發")
+        st.write("本系統使用 Google Gemini Pro 模型進行財務報表之自動化分析與解讀。")
+        st.caption("Copyright © 2025 K.R. All Rights Reserved.")
+
+# =============================================================================
+# 5. 頁面邏輯 (自定義頂部 + 專業內容)
+# =============================================================================
+
+def render_custom_header(title="AI 智能財報分析系統"):
+    """渲染自定義頂部欄 (左標題，右設定鈕)"""
+    c_title, c_settings = st.columns([20, 1])
+    with c_title:
+        st.markdown(f"<h1 style='text-align: center; margin-bottom: 0;'>🏛️ {title}</h1>", unsafe_allow_html=True)
+    with c_settings:
+        if st.button("⚙️", key="settings_btn", help="開啟系統設定"):
+            open_settings_dialog()
+    st.markdown("<p style='text-align: center; font-size: 1.1rem; opacity: 0.8;'>融合頂尖多模態 AI 技術，提供深度數據提取、專業比率計算，以及審計級與白話文雙視角報告。</p>", unsafe_allow_html=True)
     royal_divider()
+
+def home_page():
+    render_custom_header()
 
     if GLOBAL_CONFIG_ERROR:
         st.error(GLOBAL_CONFIG_ERROR)
@@ -622,12 +685,8 @@ def report_page():
             st.rerun()
         return
     
-    # 標題卡片
-    with st.container():
-        st.markdown(f"<h1 style='text-align: center;'>📜 **{res['company_name']}** 財報分析報告</h1>", unsafe_allow_html=True)
+    render_custom_header(f"📜 **{res['company_name']}** 財報分析")
     
-    royal_divider("💎")
-
     # 1. 財務比率卡片
     with st.container():
         st.subheader("💎 關鍵財務比率")
@@ -675,15 +734,17 @@ def report_page():
         st.rerun()
 
 def chat_page():
-    # 頂部導航卡片
-    with st.container():
-        c_back, c_title = st.columns([1, 6])
-        with c_back:
-            if st.button("⬅️ 返回報告"):
-                st.session_state['current_page'] = 'Report'
-                st.rerun()
-        with c_title:
-            st.markdown("<h2 style='margin-top: 0;'>💬 AI 財報戰情室</h2>", unsafe_allow_html=True)
+    # 頂部導航
+    c_back, c_title, c_set = st.columns([1, 10, 1])
+    with c_back:
+        if st.button("⬅️"):
+            st.session_state['current_page'] = 'Report'
+            st.rerun()
+    with c_title:
+        st.markdown("<h2 style='margin-top: 0; text-align: center;'>💬 AI 財報戰情室</h2>", unsafe_allow_html=True)
+    with c_set:
+        if st.button("⚙️", key="chat_settings"):
+            open_settings_dialog()
 
     royal_divider("📜")
 
@@ -720,7 +781,7 @@ def chat_page():
 
         res = st.session_state.get('analysis_results', {})
         std_data = res.get('standardization', '')
-        # V6.8: 提示詞回歸專業
+        
         sys_prompt = f"你是一位專業、客觀且經驗豐富的財務顧問。已附上原始財報PDF與標準化數據摘要:\n{std_data[:3000]}...\n請回答使用者問題：{prompt}"
         inputs.append(sys_prompt)
 
@@ -733,7 +794,7 @@ def chat_page():
                 st.session_state.chat_history.append({"role": "assistant", "content": reply})
 
 # =============================================================================
-# 5. 主程式入口
+# 6. 主程式入口
 # =============================================================================
 
 if st.session_state['current_page'] == 'Home':
