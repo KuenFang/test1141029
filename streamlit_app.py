@@ -20,168 +20,227 @@ from google.genai.errors import APIError
 MODEL_NAME = "gemini-3-pro-preview"
 
 # =============================================================================
-# 1. 頁面配置與 CSS 奢華點綴風格設計 (V6.2 重點)
+# 1. 頁面配置與 CSS 極致奢華風格設計 (V6.3 重點：填滿視覺空洞)
 # =============================================================================
 
 st.set_page_config(
-    page_title="AI財報分析系統 (K.R. Royal)",
-    page_icon="👑",
+    page_title="AI財報分析系統 (K.R. Royal Ultimate)",
+    page_icon="⚜️",
     layout="wide",
 )
 
-# 注入適應性黑白基底 + 皇家紫金點綴 CSS
+# 注入極致奢華 CSS
 st.markdown("""
 <style>
-    /* V6.2 核心改變：移除強制背景色，讓 Streamlit 自動適應黑白模式 */
-    /* .stApp { background: ... } 已移除 */
+    /* --- V6.3 核心：背景與全局氛圍 --- */
     
-    /* 1. 標題特效：亮金至亮紫漸層流光文字 (在黑白底都顯眼) */
+    /* 1. 動態深邃皇家背景 (解決空洞感的核心) */
+    .stApp {
+        /* 基底深色 */
+        background-color: #05020a; 
+        /* 疊加多層漸層以製造深度和紋理感 */
+        background-image: 
+            radial-gradient(circle at 20% 30%, rgba(123, 44, 191, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+            linear-gradient(135deg, rgba(10, 5, 20, 0.9) 0%, rgba(25, 10, 40, 0.9) 100%);
+        background-attachment: fixed; /* 讓背景固定，產生高級感 */
+        color: #e0e0e0; /* 全局文字偏亮灰，對比度更好 */
+    }
+    
+    /* 增加一個全局的微光粒子紋理 (模擬高級紙張或石材顆粒) */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 0;
+        mix-blend-mode: overlay;
+    }
+
+    /* --- V6.3 元件強化：填充空間與增加華麗感 --- */
+
+    /* 2. 標題特效強化：更寬的流光與底部裝飾 */
     h1, h2, h3, .big-title {
-        background: linear-gradient(45deg, #FFD700, #FFA500, #D4AF37, #9D4EDD, #7B2CBF);
-        background-size: 300% auto;
+        background: linear-gradient(to right, #FFD700 10%, #FFC300 30%, #D4AF37 50%, #9D4EDD 70%, #7B2CBF 90%);
+        background-size: 200% auto;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 900 !important;
-        text-shadow: 0px 1px 2px rgba(0,0,0,0.2);
-        padding-bottom: 5px;
-        animation: gradient_flow 5s ease infinite;
+        text-shadow: 0 2px 10px rgba(157, 78, 221, 0.4); /* 強烈發光 */
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+        position: relative;
+        animation: sheen 3s linear infinite;
+        text-align: center; /* 標題置中填滿橫向空間 */
     }
-    @keyframes gradient_flow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
+    @keyframes sheen {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
     }
-    
-    /* 2. 按鈕優化：寶石紫漸層底 + 流動金邊框 + 發光效果 */
-    .stButton>button {
-        background-image: linear-gradient(145deg, #7B2CBF, #4a1a88); /* 寶石紫 */
-        color: #FFD700 !important; /* 亮金文字 */
-        border: 2px solid transparent;
-        background-clip: padding-box, border-box;
-        background-origin: padding-box, border-box;
-        /* 金色流光邊框 */
-        background-image: linear-gradient(145deg, #7B2CBF, #4a1a88), linear-gradient(to right, #FFD700, #FFC300, #9D4EDD); 
-        border-radius: 15px;
-        box-shadow: 0 4px 10px rgba(123, 44, 191, 0.3);
-        transition: all 0.3s ease;
-        font-weight: bold;
-        font-size: 1.05rem;
-    }
-    .stButton>button:hover {
-        transform: translateY(-3px) scale(1.02);
-        box-shadow: 0 8px 25px rgba(255, 215, 0, 0.5); /* 金色強光暈 */
-        color: #fff !important;
-    }
-    /* 次要按鈕 (返回鍵) - 透明帶金紫邊 */
-    button[kind="secondary"] {
-        background: transparent !important;
-        border: 2px solid #9D4EDD !important;
-        color: #9D4EDD !important;
-        box-shadow: none !important;
-    }
-    button[kind="secondary"]:hover {
-        background: rgba(157, 78, 221, 0.1) !important;
-        border-color: #FFD700 !important;
-        color: #FFD700 !important;
+    /* 標題底部裝飾線 */
+    h1::after, h2::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 25%; /* 縮短一點，更精緻 */
+        width: 50%;
+        height: 3px;
+        background: linear-gradient(to right, transparent, #FFD700, #9D4EDD, transparent);
+        border-radius: 50%;
     }
 
-    /* 3. 卡片式容器設計 (用於比率與分頁內容，增加層次感) */
+    /* 3. 卡片式容器極致強化：強烈的「光暈」填充空白 */
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"] {
-        background-color: rgba(157, 78, 221, 0.03); /* 極淡紫色透明底 */
-        border-radius: 15px;
-        padding: 20px;
-        border: 1px solid rgba(255, 215, 0, 0.3); /* 金色微邊框 */
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
-        transition: all 0.3s ease;
+        background: rgba(40, 20, 60, 0.4); /* 半透明深紫底 */
+        backdrop-filter: blur(10px); /* 毛玻璃特效 */
+        border-radius: 20px;
+        padding: 30px; /* 增加內部留白，讓內容呼吸 */
+        /* 雙重邊框與強力光暈，視覺上佔據更多空間 */
+        border: 2px solid rgba(255, 215, 0, 0.3); 
+        box-shadow: 
+            0 0 0 1px rgba(157, 78, 221, 0.3) inset, /* 內發光 */
+            0 10px 30px rgba(0, 0, 0, 0.5), /* 深度陰影 */
+            0 0 40px rgba(123, 44, 191, 0.2); /* 外部紫色大光暈 */
+        margin-bottom: 25px;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column;"] > div[data-testid="stVerticalBlock"]:hover {
-         border-color: rgba(255, 215, 0, 0.7);
-         box-shadow: 0 6px 20px rgba(157, 78, 221, 0.15);
+         border-color: #FFD700;
+         box-shadow: 
+            0 0 0 2px rgba(255, 215, 0, 0.5) inset,
+            0 15px 40px rgba(0, 0, 0, 0.6),
+            0 0 60px rgba(157, 78, 221, 0.4), /* 增強光暈 */
+            0 0 20px rgba(255, 215, 0, 0.2); /* 增加金色光暈 */
+         transform: translateY(-3px);
     }
 
-    /* 4. 通訊軟體風格對話氣泡 */
-    /* 使用者 (右側，亮紫色) */
-    .stChatMessage[data-testid="stChatMessageUser"] {
-        background: linear-gradient(135deg, #9D4EDD, #7B2CBF);
-        color: white;
-        border-radius: 20px 20px 2px 20px;
-        border: 1px solid rgba(255, 215, 0, 0.3);
-        margin-left: auto;
-        max-width: 85%;
-        box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-    }
-    /* AI (左側，適應性灰底帶金邊) */
-    .stChatMessage[data-testid="stChatMessageAssistant"] {
-        background-color: rgba(128, 128, 128, 0.1); /* 適應黑白底的半透明灰 */
-        border-radius: 20px 20px 20px 2px;
-        border: 2px solid #D4AF37; /* 顯眼的金邊 */
-        margin-right: auto;
-        max-width: 85%;
-        box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-    }
-
-    /* 5. 輸入框美化 (透明底+紫金邊) */
-    .stTextInput input, .stChatInput textarea, .stFileUploader {
-        background-color: transparent !important;
-        border: 2px solid rgba(157, 78, 221, 0.5) !important;
-        border-radius: 12px;
-        transition: all 0.3s;
-    }
-    .stTextInput input:focus, .stChatInput textarea:focus {
-        border-color: #FFD700 !important;
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-    }
-
-    /* 6. Tab 分頁美化 */
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent;
-        color: #9D4EDD;
-        font-weight: bold;
-        font-size: 1.1rem;
+    /* 4. 按鈕極致優化：寶石質感 */
+    .stButton>button {
+        background: linear-gradient(135deg, #4a1a88 0%, #7B2CBF 100%);
+        color: #FFD700 !important;
         border: none;
-        padding-bottom: 10px;
+        position: relative;
+        z-index: 1;
+        border-radius: 16px;
+        box-shadow: 
+            inset 0 2px 5px rgba(255,255,255,0.2), /* 頂部高光 */
+            inset 0 -2px 5px rgba(0,0,0,0.3), /* 底部陰影 */
+            0 5px 15px rgba(123, 44, 191, 0.4); /* 外部光暈 */
+        font-weight: 800;
+        letter-spacing: 1px;
+        overflow: hidden;
+        padding: 0.6rem 1.2rem;
+    }
+    /* 按鈕的金屬邊框效果 */
+    .stButton>button::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        z-index: -1;
+        margin: -2px; /* 邊框寬度 */
+        border-radius: inherit;
+        background: linear-gradient(to bottom right, #FFD700, #9D4EDD, #FFC300);
+    }
+    .stButton>button:hover {
+        transform: scale(1.03);
+        box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
+        color: white !important;
+        text-shadow: 0 0 5px #FFD700;
+    }
+    
+    /* 5. 全新：華麗裝飾分隔線 (取代單調的 hr) */
+    .royal-divider {
+        display: flex;
+        align-items: center;
+        margin: 40px 0;
+        color: #D4AF37;
+    }
+    .royal-divider::before, .royal-divider::after {
+        content: "";
+        flex: 1;
+        height: 2px;
+        background: linear-gradient(to right, transparent, #9D4EDD, #FFD700, transparent);
+        opacity: 0.6;
+    }
+    .royal-divider::before { margin-right: 15px; }
+    .royal-divider::after { margin-left: 15px; }
+    .royal-divider-icon {
+        font-size: 1.5rem;
+        text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+
+    /* 6. 對話氣泡優化 */
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background: linear-gradient(135deg, #7B2CBF, #9D4EDD);
+        border: 2px solid #FFD700;
+        box-shadow: 0 5px 15px rgba(123, 44, 191, 0.3);
+    }
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background: rgba(30, 30, 35, 0.95); /* 深灰底 */
+        border: 2px solid #D4AF37;
+        box-shadow: 0 5px 15px rgba(212, 175, 55, 0.2);
+        color: #f0f0f0;
+    }
+
+    /* 7. 輸入框與 Tab */
+    .stTextInput input, .stChatInput textarea, .stFileUploader {
+        background-color: rgba(20, 10, 30, 0.6) !important;
+        border: 2px solid #9D4EDD !important;
+        color: #FFD700 !important;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    .stTextInput input:focus {
+        border-color: #FFD700 !important;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.4) !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: rgba(40, 20, 60, 0.3);
+        padding: 10px;
+        border-radius: 15px;
+        border: 1px solid rgba(157, 78, 221, 0.3);
     }
     .stTabs [aria-selected="true"] {
-        color: #FFD700 !important;
-        border-bottom: 4px solid #FFD700 !important;
+        background: linear-gradient(to top, rgba(255, 215, 0, 0.2), transparent);
     }
 
-    /* 7. 左下角浮水印 (K.R. Royal) - 華麗版 */
+    /* 8. 左下角浮水印 (K.R. Royal Ultimate) */
     .fixed-watermark {
         position: fixed;
         bottom: 20px;
         left: 25px;
-        font-size: 20px;
-        font-family: 'Playfair Display', serif;
-        background: linear-gradient(to right, #FFD700, #D4AF37, #9D4EDD);
+        font-size: 22px;
+        font-family: 'Cinzel Decorative', serif; /* 更華麗的字體 */
+        background: linear-gradient(to right, #FFD700, #FFF, #9D4EDD);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 900;
         z-index: 9999;
         pointer-events: none;
-        opacity: 0.8;
-        letter-spacing: 1.5px;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        opacity: 0.9;
+        filter: drop-shadow(0 0 5px rgba(255,215,0,0.5));
     }
     
-    /* 8. 分隔線美化 */
-    hr {
-        border-color: transparent;
-        background-image: linear-gradient(to right, transparent, rgba(157, 78, 221, 0.5), rgba(255, 215, 0, 0.8), rgba(157, 78, 221, 0.5), transparent);
-        height: 2px;
-        margin: 2em 0;
-    }
+    /* 隱藏原本的 hr，改用自定義的 */
+    hr { display: none; }
 </style>
-<div class="fixed-watermark">⚜️ K.R. ROYAL</div>
+<div class="fixed-watermark">⚜️ K.R. ROYAL ULTIMATE</div>
 """, unsafe_allow_html=True)
+
+# 輔助函數：產生華麗分隔線
+def royal_divider(icon="⚜️"):
+    st.markdown(f"""
+    <div class="royal-divider">
+        <span class="royal-divider-icon">{icon}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 keep_alive = """<script>setInterval(() => { fetch(window.location.href, {mode: 'no-cors'}); }, 300000);</script>"""
 st.markdown(keep_alive, unsafe_allow_html=True)
 
 
 # =============================================================================
-# 2. 核心提示詞 (【V6.2 重點】已完整補回所有內容)
+# 2. 核心提示詞 (保持完整)
 # =============================================================================
 
 # 步驟 1：抓取公司名稱
@@ -454,29 +513,31 @@ def run_analysis_flow(file_content_to_send, status_container):
     st.session_state['current_pdf_bytes'] = file_content_to_send
     
     try:
-        with status_container.status("⏳ 正在執行 AI 分析...", expanded=True) as status:
-            st.write("步驟 1/5: 正在抓取公司名稱...")
-            name_resp = call_multimodal_api(file_content_to_send, PROMPT_COMPANY_NAME, False)
-            if name_resp.get("error"): raise Exception(name_resp['error'])
-            company_name = name_resp["content"].strip()
-            
-            st.write("步驟 2/5: 正在提取與標準化財報數據...")
-            std_resp = call_multimodal_api(file_content_to_send, PROMPT_BIAO_ZHUN_HUA_CONTENT, False)
-            if std_resp.get("error"): raise Exception(std_resp['error'])
-            
-            st.write("步驟 3/5: 正在計算財務比率...")
-            ratio_resp = call_multimodal_api(file_content_to_send, PROMPT_RATIO_CONTENT, True)
-            if ratio_resp.get("error"): raise Exception(ratio_resp['error'])
-            
-            st.write("步驟 4/5: 正在生成專業審計總結...")
-            sum_resp = call_text_api(std_resp["content"], PROMPT_ZONG_JIE_CONTENT)
-            if sum_resp.get("error"): raise Exception(sum_resp['error'])
-            
-            st.write("步驟 5/5: 正在生成白話文講解...")
-            exp_resp = call_text_api(std_resp["content"], PROMPT_JIAN_JIE_CONTENT)
-            if exp_resp.get("error"): raise Exception(exp_resp['error'])
-            
-            status.update(label="✅ 分析完成！", state="complete", expanded=False)
+        # 使用 container 包裹狀態列，應用卡片樣式
+        with st.container():
+            with status_container.status("⏳ 正在執行皇家 AI 分析儀式...", expanded=True) as status:
+                st.write("📜 步驟 1/5: 正在調閱公司卷宗 (抓取名稱)...")
+                name_resp = call_multimodal_api(file_content_to_send, PROMPT_COMPANY_NAME, False)
+                if name_resp.get("error"): raise Exception(name_resp['error'])
+                company_name = name_resp["content"].strip()
+                
+                st.write("🔍 步驟 2/5: 正在進行深度數據煉金 (標準化提取)...")
+                std_resp = call_multimodal_api(file_content_to_send, PROMPT_BIAO_ZHUN_HUA_CONTENT, False)
+                if std_resp.get("error"): raise Exception(std_resp['error'])
+                
+                st.write("🧮 步驟 3/5: 正在演算關鍵財務指標 (比率計算)...")
+                ratio_resp = call_multimodal_api(file_content_to_send, PROMPT_RATIO_CONTENT, True)
+                if ratio_resp.get("error"): raise Exception(ratio_resp['error'])
+                
+                st.write("⚖️ 步驟 4/5: 正在草擬專業審計諭令 (總結生成)...")
+                sum_resp = call_text_api(std_resp["content"], PROMPT_ZONG_JIE_CONTENT)
+                if sum_resp.get("error"): raise Exception(sum_resp['error'])
+                
+                st.write("🗣️ 步驟 5/5: 正在轉譯為皇家白話文 (講解生成)...")
+                exp_resp = call_text_api(std_resp["content"], PROMPT_JIAN_JIE_CONTENT)
+                if exp_resp.get("error"): raise Exception(exp_resp['error'])
+                
+                status.update(label="✨ 分析儀式完成！準備呈報...", state="complete", expanded=False)
 
         st.session_state['analysis_results'] = {
             "company_name": company_name,
@@ -485,62 +546,84 @@ def run_analysis_flow(file_content_to_send, status_container):
             "explanation": exp_resp["content"],
             "standardization": std_resp["content"]
         }
+        time.sleep(1) # 稍作停留展示完成狀態
         st.session_state['current_page'] = 'Report' # 導航到報告頁
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ 分析流程中斷：\n{e}")
+        st.error(f"❌ 分析儀式中斷：\n{e}")
 
 # =============================================================================
-# 4. 頁面邏輯 (V6.2 增加插圖與華麗元素)
+# 4. 頁面邏輯 (V6.3 增加插圖與華麗元素，並使用卡片填充空間)
 # =============================================================================
 
 def home_page():
-    st.markdown("<h2 class='big-title'>🏛️ 一鍵智能財報分析與解讀</h2>", unsafe_allow_html=True)
-    st.markdown("本系統利用 **AI 多模態技術**，對您上傳的 PDF 財報進行**數據提取、專業比率計算**，並生成**專業審計總結**和**非專業白話文講解**等多視角報告。")
+    # 使用 container 包裹主標題區塊
+    with st.container():
+        st.markdown("<h1 style='text-align: center;'>🏛️ 皇家 AI 財報分析系統</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 1.1rem; opacity: 0.8;'>融合頂尖多模態 AI 技術，為您呈獻深度數據提取、專業比率演算，以及審計級與白話文雙重視角報告。</p>", unsafe_allow_html=True)
+
+    royal_divider("💎")
 
     if GLOBAL_CONFIG_ERROR:
         st.error(GLOBAL_CONFIG_ERROR)
         return
 
-    # 橫排按鍵
-    c1, c2, c3, c4 = st.columns(4)
-    target_file = None
-    status_cont = st.empty()
-    
-    with c1: 
-        if st.button("📊 2330 (台積電)", use_container_width=True): target_file = "2330.pdf"
-    with c2: 
-        if st.button("📈 2382 (廣達)", use_container_width=True): target_file = "2382.pdf"
-    with c3: 
-        if st.button("📉 2308 (台達電)", use_container_width=True): target_file = "2308.pdf"
-    with c4: 
-        if st.button("💻 2454 (聯發科)", use_container_width=True): target_file = "2454.pdf"
+    # 快速通道區塊 (使用 container)
+    with st.container():
+        st.markdown("### ⚡ 皇家快速通道 (範例企業)")
+        c1, c2, c3, c4 = st.columns(4)
+        target_file = None
+        status_cont = st.empty()
+        
+        with c1: 
+            if st.button("📊 2330 (台積電)", use_container_width=True): target_file = "2330.pdf"
+        with c2: 
+            if st.button("📈 2382 (廣達)", use_container_width=True): target_file = "2382.pdf"
+        with c3: 
+            if st.button("📉 2308 (台達電)", use_container_width=True): target_file = "2308.pdf"
+        with c4: 
+            if st.button("💻 2454 (聯發科)", use_container_width=True): target_file = "2454.pdf"
 
-    uploaded = st.file_uploader("📂 請上傳您的財務報表文件 (或點擊上方快速按鍵)", type=["pdf"], key="uploader")
-    
-    if target_file and os.path.exists(target_file):
-        with open(target_file, "rb") as f: run_analysis_flow(f.read(), status_cont)
-    elif target_file:
-        st.error(f"找不到檔案: {target_file}")
-    elif uploaded and st.button("🚀 開始奢華分析之旅", type="primary"):
-        run_analysis_flow(uploaded.read(), status_cont)
+    royal_divider("📂")
 
-    st.markdown("---")
+    # 上傳區塊 (使用 container)
+    with st.container():
+         st.markdown("### 📜 呈遞您的財務卷宗")
+         uploaded = st.file_uploader("請選擇 PDF 格式的財務報告文件...", type=["pdf"], key="uploader")
+    
+    royal_divider("🚀")
+
+    # 啟動按鈕區塊
+    with st.container():
+        if target_file and os.path.exists(target_file):
+            with open(target_file, "rb") as f: run_analysis_flow(f.read(), status_cont)
+        elif target_file:
+            st.error(f"❌ 找不到範例檔案: {target_file}")
+        elif uploaded:
+            col_start, col_rest = st.columns([1, 2])
+            with col_start:
+                 if st.button("✨ 啟動皇家分析儀式", type="primary", use_container_width=True):
+                    run_analysis_flow(uploaded.read(), status_cont)
+        else:
+            st.info("請先上傳文件或選擇範例以開始。")
 
 def report_page():
     res = st.session_state.get('analysis_results')
     if not res:
-        st.info("請先分析財報。")
-        if st.button("⬅️ 回首頁"): 
+        st.info("請先進行分析。")
+        if st.button("⬅️ 返回大廳"): 
             st.session_state['current_page'] = 'Home'
             st.rerun()
         return
     
-    # 標題
-    st.markdown(f"<h1 style='text-align: center;'>📜 **{res['company_name']}** 財報分析報告</h1>", unsafe_allow_html=True)
+    # 標題卡片
+    with st.container():
+        st.markdown(f"<h1 style='text-align: center;'>📜 **{res['company_name']}** 皇家財報分析報告</h1>", unsafe_allow_html=True)
     
-    # 1. 財務比率 (使用 st.container 搭配 CSS 實現卡片效果)
+    royal_divider("💎")
+
+    # 1. 財務比率卡片
     with st.container():
         st.subheader("💎 財務比率關鍵指標")
         ratio_txt = res['ratio']
@@ -558,52 +641,63 @@ def report_page():
                     break
         if shown_count == 0: st.markdown(ratio_txt)
 
-    st.markdown("---")
+    royal_divider("🤖")
     
-    # 2. 進入 AI 對話室按鈕
-    st.markdown("### 🤖 AI 智能顧問")
-    st.info("💡 想要深入挖掘這份財報的秘密嗎？點擊下方按鈕進入皇家戰情室，與 AI 顧問進行自由對話！")
-    if st.button("💬 進入皇家 AI 戰情室 (自由對話模式)", type="primary", use_container_width=True):
-        st.session_state['current_page'] = 'Chat'
-        st.rerun()
+    # 2. AI 對話室引導卡片
+    with st.container():
+        st.markdown("### 🤖 皇家 AI 首席顧問")
+        st.info("💡 陛下，若對數據有任何疑慮，請移步至戰情室，首席顧問隨時準備為您解惑。")
+        if st.button("💬 前往皇家 AI 戰情室 (自由對話模式)", type="primary", use_container_width=True):
+            st.session_state['current_page'] = 'Chat'
+            st.rerun()
 
-    st.markdown("---")
+    royal_divider("📄")
 
-    # 3. 三大分頁 (使用 container 包裹以應用卡片樣式)
+    # 3. 三大分頁卡片
     with st.container():
         t1, t2, t3 = st.tabs(["📄 專業審計總結", "🗣️ 白話文數據講解", "📊 標準化資訊提取"])
         with t1: st.markdown(res['summary'])
         with t2: st.markdown(res['explanation'])
         with t3: st.markdown(res['standardization'])
     
-    st.markdown("---")
-    if st.button("⬅️ 返回上傳頁面", kind="secondary"):
+    royal_divider("⬅️")
+    
+    # 返回按鈕
+    if st.button("⬅️ 結束閱覽，返回大廳", kind="secondary"):
         st.session_state['analysis_results'] = None
         st.session_state['current_pdf_bytes'] = None
         st.session_state['current_page'] = 'Home'
         st.rerun()
 
 def chat_page():
-    # 頂部導航列
-    c_back, c_title = st.columns([1, 6])
-    with c_back:
-        if st.button("⬅️ 返回"):
-            st.session_state['current_page'] = 'Report'
-            st.rerun()
-    with c_title:
-        st.markdown("<h2>💬 皇家 AI 財報戰情室</h2>", unsafe_allow_html=True)
+    # 頂部導航卡片
+    with st.container():
+        c_back, c_title = st.columns([1, 6])
+        with c_back:
+            if st.button("⬅️ 返回報告"):
+                st.session_state['current_page'] = 'Report'
+                st.rerun()
+        with c_title:
+            st.markdown("<h2 style='margin-top: 0;'>💬 皇家 AI 財報戰情室</h2>", unsafe_allow_html=True)
 
-    # 顯示歷史訊息
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    royal_divider("📜")
 
-    # 圖片上傳區 (可收折)
-    with st.expander("📎 上傳輔助圖片/截圖 (選用)"):
-        chat_uploaded_img = st.file_uploader("選擇圖片", type=["png", "jpg", "jpeg"], key="chat_img_up")
+    # 聊天內容區 (使用一個大的 container 包裹，增加背景感)
+    with st.container():
+        # 顯示歷史訊息
+        if not st.session_state.chat_history:
+            st.caption("✨ 戰情室已開啟，請隨意提問...")
+        
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
-    # 輸入區
-    if prompt := st.chat_input("請輸入您的問題 (例如: 請解釋為什麼毛利率下降?)..."):
+        # 圖片上傳區 (可收折)
+        with st.expander("📎 呈遞輔助圖像/截圖 (選用)"):
+            chat_uploaded_img = st.file_uploader("選擇圖片文件...", type=["png", "jpg", "jpeg"], key="chat_img_up")
+
+    # 輸入區 (在 container 外，緊貼底部)
+    if prompt := st.chat_input("請輸入您的問題，顧問將即刻研析..."):
         # 1. 顯示並紀錄 User 訊息
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -622,12 +716,12 @@ def chat_page():
 
         res = st.session_state.get('analysis_results', {})
         std_data = res.get('standardization', '')
-        sys_prompt = f"你是一位專業且睿智的皇家財務顧問。已附上原始財報PDF與標準化數據摘要:\n{std_data[:3000]}...\n請回答使用者問題：{prompt}"
+        sys_prompt = f"你是一位專業、睿智且語氣尊貴的皇家財務顧問。已附上原始財報PDF與標準化數據摘要:\n{std_data[:3000]}...\n請回答使用者問題：{prompt}"
         inputs.append(sys_prompt)
 
         # 3. 呼叫 API
         with st.chat_message("assistant"):
-            with st.spinner("AI 顧問正在思考中..."):
+            with st.spinner("🟣 顧問正在深度研析中..."):
                 response = call_chat_api(inputs)
                 reply = f"❌ 錯誤: {response['error']}" if response.get("error") else response["content"]
                 st.markdown(reply)
