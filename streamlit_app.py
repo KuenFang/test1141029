@@ -23,7 +23,7 @@ MODEL_NAME = "gemini-3-pro-preview"
 if 'ui_theme' not in st.session_state:
     st.session_state['ui_theme'] = '跟隨系統'
 if 'is_processing' not in st.session_state:
-    st.session_state['is_processing'] = False  # 新增：處理狀態旗標
+    st.session_state['is_processing'] = False  # 關鍵：處理狀態旗標
 
 # =============================================================================
 # 1. 頁面配置與 CSS 雙軌隔離設計
@@ -53,6 +53,7 @@ CSS_BASE = """
     /* 分析中狀態文字 */
     .processing-indicator {
         color: #d4af37; font-weight: bold; font-family: monospace; animation: pulse 1.5s infinite;
+        text-align: center; padding: 10px; border: 1px solid #d4af37; border-radius: 10px;
     }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
@@ -177,9 +178,9 @@ theme_selection = st.session_state.get('ui_theme', '跟隨系統')
 final_css = CSS_BASE + CSS_STRUCTURE
 
 if theme_selection == '極致黑金 (Dark)':
-    final_css += CSS_DARK # 強制 Dark CSS
+    final_css += CSS_DARK 
 elif theme_selection == '皇家白金 (Light)':
-    final_css += CSS_LIGHT # 強制 Light CSS
+    final_css += CSS_LIGHT
 else: # 跟隨系統
     final_css += f"@media (prefers-color-scheme: dark) {{ {CSS_DARK} }} @media (prefers-color-scheme: light) {{ {CSS_LIGHT} }}"
 
@@ -455,12 +456,10 @@ def call_chat_api(contents):
         return {"error": str(e)}
 
 def run_analysis_flow(file_content_to_send, status_container):
-    # 鎖定狀態：防止使用者在分析中途切換主題
     st.session_state['is_processing'] = True
     st.session_state['current_pdf_bytes'] = file_content_to_send
     
     try:
-        # 使用 container 包裹狀態列，應用卡片樣式
         with st.container():
             with status_container.status("⏳ 正在執行 AI 分析...", expanded=True) as status:
                 st.write("📜 步驟 1/5: 正在識別公司名稱...")
@@ -495,11 +494,11 @@ def run_analysis_flow(file_content_to_send, status_container):
         }
         time.sleep(0.5)
         st.session_state['current_page'] = 'Report' 
-        st.session_state['is_processing'] = False # 解鎖
+        st.session_state['is_processing'] = False 
         st.rerun()
 
     except Exception as e:
-        st.session_state['is_processing'] = False # 解鎖
+        st.session_state['is_processing'] = False
         st.error(f"❌ 分析流程中斷：\n{e}")
 
 # =============================================================================
@@ -511,7 +510,6 @@ def open_settings_dialog():
     tab_gen, tab_data, tab_about = st.tabs(["⚙️ 一般設定", "🧹 資料管理", "ℹ️ 關於系統"])
     
     with tab_gen:
-        # 主題切換 (V7.1 關鍵功能)
         current_theme_index = ["跟隨系統", "極致黑金 (Dark)", "皇家白金 (Light)"].index(st.session_state.get('ui_theme', '跟隨系統'))
         new_theme = st.radio(
             "🎨 介面主題", 
@@ -521,7 +519,7 @@ def open_settings_dialog():
         )
         if new_theme != st.session_state['ui_theme']:
             st.session_state['ui_theme'] = new_theme
-            st.rerun() # 立即重整應用
+            st.rerun() 
 
         st.divider()
         st.checkbox("啟用進階推理模式 (Beta)", value=True, help="使用更強的模型進行分析")
@@ -539,22 +537,20 @@ def open_settings_dialog():
             st.rerun()
             
     with tab_about:
-        st.markdown("### AI 財報分析系統 v7.2")
+        st.markdown("### AI 財報分析系統 v7.3")
         st.write("由 K.R. Design 開發")
         st.write("本系統使用 Google Gemini Pro 模型進行財務報表之自動化分析與解讀。")
         st.caption("Copyright © 2025 K.R. All Rights Reserved.")
 
 # =============================================================================
-# 5. 頁面邏輯 (自定義頂部 + 專業內容 + 鎖定機制)
+# 5. 頁面邏輯
 # =============================================================================
 
 def render_custom_header(title="AI 智能財報分析系統"):
-    """渲染自定義頂部欄 (左標題，右設定鈕)"""
     c_title, c_settings = st.columns([20, 1])
     with c_title:
         st.markdown(f"<h1 style='text-align: center; margin-bottom: 0;'>🏛️ {title}</h1>", unsafe_allow_html=True)
     with c_settings:
-        # V7.2 關鍵：如果正在分析，隱藏設定按鈕，防止誤觸導致 Rerun 中斷
         if st.session_state.get('is_processing', False):
             st.markdown("<div class='processing-indicator'>⏳</div>", unsafe_allow_html=True)
         else:
@@ -570,14 +566,12 @@ def home_page():
         st.error(GLOBAL_CONFIG_ERROR)
         return
 
-    # 快速通道區塊
     with st.container():
         st.markdown("### ⚡ 快速分析 (範例企業)")
         c1, c2, c3, c4 = st.columns(4)
         target_file = None
         status_cont = st.empty()
         
-        # 鎖定機制：若正在分析，禁用按鈕
         is_disabled = st.session_state.get('is_processing', False)
         
         with c1: 
@@ -591,14 +585,12 @@ def home_page():
 
     royal_divider("📂")
 
-    # 上傳區塊
     with st.container():
          st.markdown("### 📜 上傳財務報告")
          uploaded = st.file_uploader("請選擇 PDF 格式的文件...", type=["pdf"], key="uploader", disabled=is_disabled)
     
     royal_divider("🚀")
 
-    # 啟動按鈕區塊
     with st.container():
         if target_file and os.path.exists(target_file):
             with open(target_file, "rb") as f: run_analysis_flow(f.read(), status_cont)
@@ -621,29 +613,33 @@ def report_page():
             st.rerun()
         return
     
-    render_custom_header(f"📜 **{res['company_name']}** 財報分析")
+    render_custom_header(f"📜 **{res.get('company_name', '未命名公司')}** 財報分析")
     
-    # 1. 財務比率卡片
+    # 1. 財務比率 (新增防呆檢查)
     with st.container():
         st.subheader("💎 關鍵財務比率")
-        ratio_txt = res['ratio']
-        tables = [t.strip() for t in ratio_txt.split('\n\n') if t.strip().startswith('|') and '---' in t]
-        key_map = {'ROE': '股東權益報酬率', 'Net Profit': '淨利率', 'Gross Profit': '毛利率','P/E': '本益比', 'Current Ratio': '流動比率', 'Debt Ratio': '負債比率', 'Quick Ratio': '速動比率'}
+        ratio_txt = res.get('ratio')
         
-        cols = st.columns(3) + st.columns(4)
-        shown_count = 0
-        for t in tables:
-            for k, v in key_map.items():
-                if k in t or v in t:
-                    if shown_count < 7:
-                        with cols[shown_count]: st.markdown(t, unsafe_allow_html=True)
-                        shown_count += 1
-                    break
-        if shown_count == 0: st.markdown(ratio_txt)
+        if ratio_txt:
+            tables = [t.strip() for t in ratio_txt.split('\n\n') if t.strip().startswith('|') and '---' in t]
+            key_map = {'ROE': '股東權益報酬率', 'Net Profit': '淨利率', 'Gross Profit': '毛利率','P/E': '本益比', 'Current Ratio': '流動比率', 'Debt Ratio': '負債比率', 'Quick Ratio': '速動比率'}
+            
+            cols = st.columns(3) + st.columns(4)
+            shown_count = 0
+            for t in tables:
+                for k, v in key_map.items():
+                    if k in t or v in t:
+                        if shown_count < 7:
+                            with cols[shown_count]: st.markdown(t, unsafe_allow_html=True)
+                            shown_count += 1
+                        break
+            if shown_count == 0: st.markdown(ratio_txt)
+        else:
+            st.warning("⚠️ 無法讀取財務比率數據，請重新嘗試分析。")
 
     royal_divider("🤖")
     
-    # 2. AI 對話室引導卡片
+    # 2. AI 對話室引導
     with st.container():
         st.markdown("### 🤖 AI 首席顧問")
         st.info("💡 如果您對報告中的數據有任何疑問，請使用下方的聊天室，AI 顧問將為您詳細解答。")
@@ -653,16 +649,15 @@ def report_page():
 
     royal_divider("📄")
 
-    # 3. 三大分頁卡片
+    # 3. 三大分頁 (新增防呆檢查)
     with st.container():
         t1, t2, t3 = st.tabs(["📄 專業審計總結", "🗣️ 白話文數據講解", "📊 標準化資訊提取"])
-        with t1: st.markdown(res['summary'])
-        with t2: st.markdown(res['explanation'])
-        with t3: st.markdown(res['standardization'])
+        with t1: st.markdown(res.get('summary', '⚠️ 數據遺失'))
+        with t2: st.markdown(res.get('explanation', '⚠️ 數據遺失'))
+        with t3: st.markdown(res.get('standardization', '⚠️ 數據遺失'))
     
     royal_divider("⬅️")
     
-    # 返回按鈕
     if st.button("⬅️ 結束閱覽，返回首頁", kind="secondary"):
         st.session_state['analysis_results'] = None
         st.session_state['current_pdf_bytes'] = None
@@ -670,7 +665,6 @@ def report_page():
         st.rerun()
 
 def chat_page():
-    # 頂部導航
     c_back, c_title, c_set = st.columns([1, 10, 1])
     with c_back:
         if st.button("⬅️"):
@@ -684,7 +678,6 @@ def chat_page():
 
     royal_divider("📜")
 
-    # 聊天內容區
     with st.container():
         if not st.session_state.chat_history:
             st.caption("✨ 戰情室已開啟，請輸入您的問題...")
@@ -693,24 +686,18 @@ def chat_page():
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-        # 圖片上傳區 (可收折)
         with st.expander("📎 上傳輔助圖片/截圖 (選用)"):
             chat_uploaded_img = st.file_uploader("選擇圖片文件...", type=["png", "jpg", "jpeg"], key="chat_img_up")
 
-    # 輸入區
     if prompt := st.chat_input("請輸入您的問題，顧問將即刻分析..."):
-        # 1. 顯示並紀錄 User 訊息
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state.chat_history.append({"role": "user", "content": prompt})
         
-        # 2. 準備 Context
         inputs = []
-        # PDF
         if st.session_state.get('current_pdf_bytes'):
             try: inputs.append(types.Part.from_bytes(data=st.session_state['current_pdf_bytes'], mime_type='application/pdf'))
             except: pass
-        # 新上傳圖片
         if chat_uploaded_img:
              try: inputs.append(types.Part.from_bytes(data=chat_uploaded_img.read(), mime_type=chat_uploaded_img.type))
              except: pass
@@ -721,7 +708,6 @@ def chat_page():
         sys_prompt = f"你是一位專業、客觀且經驗豐富的財務顧問。已附上原始財報PDF與標準化數據摘要:\n{std_data[:3000]}...\n請回答使用者問題：{prompt}"
         inputs.append(sys_prompt)
 
-        # 3. 呼叫 API
         with st.chat_message("assistant"):
             with st.spinner("🟣 顧問正在思考中..."):
                 response = call_chat_api(inputs)
